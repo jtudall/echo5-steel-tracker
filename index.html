@@ -1511,6 +1511,7 @@ function parseSDS2(text){
     if(!qu&&pcm){inFB=false;cur={pc_mark:pcm,description:desc,qty:cq(qt),unit_weight_lbs:parseInt(wu)||null,total_weight_lbs:parseInt(wt)||null,components:[],field_bolts:[]};members.push(cur);}
     else if(isHW&&cur){if(inFB){cur.field_bolts.push({description:desc,qty:cq(qt||qu),length:len,remarks:rem,is_field_bolt:true});}else{cur.components.push({description:desc,qty_per_member:cq(qt||qu),qty_total:null,length:len,unit_weight_lbs:null,total_weight_lbs:null,minor_mark:'',steel_grade:'',remarks:rem,is_field_bolt:false,is_main:false});}}
     else if(qu&&!pcm&&cur){cur.components.push({description:desc,qty_per_member:cq(qu),qty_total:cq(qt),length:len,unit_weight_lbs:parseInt(wu)||null,total_weight_lbs:parseInt(wt)||null,minor_mark:mm,steel_grade:gr,remarks:rem,is_field_bolt:false,is_main:cur.components.length===0});}
+  }return members;
 }
 async function doImport(){
   const name=document.getElementById('import-job-name').value.trim();if(!name)return alert('Job name required.');if(!parsedBOMData)return alert('Select a BOM file first.');
