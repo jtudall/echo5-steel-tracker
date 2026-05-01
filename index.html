@@ -83,7 +83,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 input[type="file"]{padding:6px}select option{background:var(--surface2)}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:0.875rem}
-th{text-align:left;padding:10px 14px;color:#a0aec8;font-family:var(--fd);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border2);white-space:nowrap}uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border);white-space:nowrap}
+th{text-align:left;padding:10px 14px;color:#a0aec8;font-family:var(--fd);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border2);white-space:nowrap}
 td{padding:10px 14px;border-bottom:1px solid var(--border2);vertical-align:middle}
 tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.015)}
 .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:4px;font-size:0.7rem;font-family:var(--fd);font-weight:700;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap}
@@ -405,7 +405,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
   <div id="page-jobs" class="page">
     <div class="section-header">
       <div class="section-title">Jobs</div>
-      <button class="btn btn-primary" onclick="openImportModal()">+ Import Job</button>
+      <button class="btn btn-primary" onclick="openImportModal()">+ New Job</button>
     </div>
     <div id="jobs-list"></div>
   </div>
@@ -530,7 +530,11 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
 
 <div class="modal-overlay" id="modal-import">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">Import New Job</div><button class="modal-close" onclick="closeModal('modal-import')">&#x2715;</button></div>
+    <div class="modal-header"><div class="modal-title">New Job</div><button class="modal-close" onclick="closeModal('modal-import')">&#x2715;</button></div>
+    <div style="display:flex;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:2px;margin-bottom:16px;width:fit-content">
+      <button id="import-mode-bom" class="gantt-zoom-btn active-zoom">BOM Import</button>
+      <button id="import-mode-manual" class="gantt-zoom-btn">Manual Entry</button>
+    </div>
     <div class="grid-2">
       <div class="form-group"><label>Job Name *</label><input id="import-job-name" placeholder="e.g. Morrison Ranch"></div>
       <div class="form-group"><label>Job Number</label><input id="import-job-number" placeholder="e.g. SW-MSF-001"></div>
@@ -541,18 +545,60 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
       <div class="form-group"><label>Site Contact Phone</label><input id="import-contact-phone" placeholder="(480) 555-0000" type="tel"></div>
     </div>
     <div class="form-group"><label>Assign PM</label><select id="import-pm"><option value="">-- Select PM --</option></select></div>
-    <div class="form-group"><label>SDS/2 Text BOM File *</label>
-      <div class="upload-zone" onclick="document.getElementById('bom-file-input').click()">
-        <div class="upload-icon">&#x1F4C4;</div>
-        <div class="text-muted" style="font-size:0.85rem">Click to select SDS/2 .txt BOM export</div>
+    <div id="import-bom-section">
+      <div class="form-group"><label>SDS/2 Text BOM File *</label>
+        <div class="upload-zone" onclick="document.getElementById('bom-file-input').click()">
+          <div class="upload-icon">&#x1F4C4;</div>
+          <div class="text-muted" style="font-size:0.85rem">Click to select SDS/2 .txt BOM export</div>
+        </div>
+        <input id="bom-file-input" type="file" accept=".txt" class="hidden" onchange="handleFileSelect(event)">
+        <div id="file-status" class="text-muted mt-8" style="font-size:0.8rem"></div>
       </div>
-      <input id="bom-file-input" type="file" accept=".txt" class="hidden" onchange="handleFileSelect(event)">
-      <div id="file-status" class="text-muted mt-8" style="font-size:0.8rem"></div>
+      <div id="import-preview" class="hidden"><div class="alert alert-info" id="import-preview-msg"></div></div>
     </div>
-    <div id="import-preview" class="hidden"><div class="alert alert-info" id="import-preview-msg"></div></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn btn-secondary" onclick="closeModal('modal-import')">Cancel</button>
+      <button class="btn btn-primary" id="import-manual-save-btn" style="display:none" onclick="doImportManual()">Create Job</button>
       <button class="btn btn-primary" id="import-btn" onclick="doImport()" disabled>Import Job</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-member">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Add Member</div>
+        <div class="text-muted" style="font-size:0.82rem;margin-top:3px" id="add-member-job-name"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-add-member')">&#x2715;</button>
+    </div>
+    <div class="grid-2">
+      <div class="form-group" style="grid-column:1/-1">
+        <label>PC Mark <span style="color:var(--red)">*</span></label>
+        <input id="add-member-pcmark" placeholder="e.g. C10, BRC 1" style="text-transform:uppercase">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Description</label>
+        <input id="add-member-desc" placeholder="e.g. W14x22 COLUMN">
+      </div>
+      <div class="form-group">
+        <label>Quantity</label>
+        <input id="add-member-qty" type="number" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>Unit Weight (lbs)</label>
+        <input id="add-member-unit-wt" type="number" min="0" placeholder="optional">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Total Weight (lbs)</label>
+        <input id="add-member-total-wt" type="number" min="0" placeholder="optional">
+      </div>
+    </div>
+    <input type="hidden" id="add-member-job-id">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-member')">Cancel</button>
+      <button class="btn btn-primary" onclick="doAddMember()">Add Member</button>
     </div>
   </div>
 </div>
@@ -1299,15 +1345,18 @@ function renderJobs(){
       (lastMovedBy?'<div style="font-size:0.68rem;color:var(--text3);font-family:monospace;margin-top:2px">Install date last moved by '+lastMovedBy.name+' on '+fmtDate(j.install_date_last_moved_at)+'</div>':'')+
       '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-wrap:wrap">'+
       '<span style="font-size:0.78rem;color:var(--text2)">'+memberCount+' members · '+drawingCount+' drawings</span>'+
+      (canAdmin?'<button class="btn btn-sm btn-secondary add-member-btn">+ Add Member</button>':'')+
+      (canAdmin?'<button class="btn btn-sm btn-secondary add-member-btn">+ Add Member</button>':'')+
       (canAdmin&&memberCount?'<button class="btn btn-sm btn-danger clear-bom-btn" style="margin-left:auto">🗑 Clear BOM</button>':'')+
-      (canAdmin&&drawingCount?'<button class="btn btn-sm btn-danger clear-drawings-btn">🗑 Clear Drawings</button>':'')+
+      (canAdmin&&drawingCount?'<button class="btn btn-sm btn-danger clear-drawings-btn">🗑 Clear Drawings</button>':'')+ 
       '</div>';
     div.querySelectorAll('.edit-job-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){openEditJob(this.dataset.jobId);});});
     div.querySelectorAll('.draw-upload-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){openDrawingUpload(this.dataset.jobId);});});
     div.querySelectorAll('.delete-job-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){confirmDeleteJob(this.dataset.jobId);});});
     div.querySelectorAll('.clear-bom-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){confirmClearBOM(this.dataset.jobId);});});
     div.querySelectorAll('.clear-drawings-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){confirmClearDrawings(this.dataset.jobId);});});
-    list.appendChild(div);
+    div.querySelectorAll('.add-member-btn').forEach(b=>{b.dataset.jobId=j.id;b.addEventListener('click',function(){openAddMemberModal(this.dataset.jobId);});});
+    list.appendChild(div); 
   });
 }
 function openEditJob(jobId){
@@ -1384,7 +1433,59 @@ function openImportModal(){
   document.getElementById('import-preview').classList.add('hidden');document.getElementById('import-btn').disabled=true;document.getElementById('bom-file-input').value='';
   const sel=document.getElementById('import-pm');sel.innerHTML='<option value="">-- Select PM --</option>';
   PROFILES.filter(u=>['admin','pm','shop_mgr'].includes(u.role)).forEach(u=>sel.innerHTML+='<option value="'+u.id+'">'+u.name+'</option>');
-  sel.value=currentUser.id;openModal('modal-import');
+  sel.value=currentUser.id;
+  setImportMode('bom');
+  openModal('modal-import');
+}
+function setImportMode(mode){
+  document.getElementById('import-mode-bom').classList.toggle('active-zoom',mode==='bom');
+  document.getElementById('import-mode-manual').classList.toggle('active-zoom',mode==='manual');
+  document.getElementById('import-bom-section').style.display=mode==='bom'?'':'none';
+  document.getElementById('import-btn').style.display=mode==='bom'?'':'none';
+  document.getElementById('import-manual-save-btn').style.display=mode==='manual'?'':'none';
+  document.getElementById('import-mode-bom').onclick=()=>setImportMode('bom');
+  document.getElementById('import-mode-manual').onclick=()=>setImportMode('manual');
+}
+async function doImportManual(){
+  const name=document.getElementById('import-job-name').value.trim();
+  if(!name)return alert('Job name required.');
+  const pm_id=document.getElementById('import-pm').value||null;
+  showLoading('Creating job...');
+  try{
+    const jobData={name,number:document.getElementById('import-job-number').value.trim(),gc:document.getElementById('import-gc').value.trim(),due:document.getElementById('import-due').value||null,pm_id,created_by:currentUser.id,address:document.getElementById('import-address').value.trim()||null,contact_name:document.getElementById('import-contact-name').value.trim()||null,contact_phone:document.getElementById('import-contact-phone').value.trim()||null,duration_days:1,duration_confirmed:false};
+    const jobs=await sb.insert('jobs',jobData);const job=jobs[0];JOBS.unshift(job);
+    await logAction(job.id,null,'(all)','JOB CREATED (MANUAL)');
+    closeModal('modal-import');navigateTo('jobs');
+    showAlert('Job created. Use "+ Add Member" to add members.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+function openAddMemberModal(jobId){
+  const j=JOBS.find(x=>x.id===jobId);if(!j)return;
+  document.getElementById('add-member-job-id').value=jobId;
+  document.getElementById('add-member-job-name').textContent=j.name;
+  ['add-member-pcmark','add-member-desc','add-member-unit-wt','add-member-total-wt'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('add-member-qty').value='1';
+  openModal('modal-add-member');
+}
+async function doAddMember(){
+  const jobId=document.getElementById('add-member-job-id').value;
+  const pcMark=document.getElementById('add-member-pcmark').value.trim().toUpperCase();
+  if(!pcMark)return showAlert('PC Mark is required.','warn');
+  const qty=parseInt(document.getElementById('add-member-qty').value)||1;
+  const desc=document.getElementById('add-member-desc').value.trim();
+  const unitWt=parseFloat(document.getElementById('add-member-unit-wt').value)||null;
+  const totalWt=parseFloat(document.getElementById('add-member-total-wt').value)||null;
+  showLoading('Adding member...');
+  try{
+    const mData={job_id:jobId,pc_mark:pcMark,description:desc||'',qty,unit_weight_lbs:unitWt,total_weight_lbs:totalWt,manually_entered:true};
+    const members=await sb.insert('members',mData);const member=members[0];MEMBERS.push(member);
+    const instBatch=[];for(let n=1;n<=qty;n++)instBatch.push({member_id:member.id,job_id:jobId,instance_num:n,status:'pending'});
+    const insts=await sb.insert('instances',instBatch);if(insts)INSTANCES.push(...insts);
+    await logAction(jobId,member.id,pcMark,'MEMBER ADDED (MANUAL)');
+    closeModal('modal-add-member');
+    renderJobs();renderMembers();renderDashboard();
+    showAlert(pcMark+' added.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
 }
 function handleFileSelect(event){
   const file=event.target.files[0];if(!file)return;document.getElementById('file-status').textContent='Reading: '+file.name+'...';
