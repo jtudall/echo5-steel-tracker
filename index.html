@@ -1068,7 +1068,8 @@ async function submitDispute(mid){
     const res=await sb.insert('disputes',rec);if(res&&res[0])DISPUTES.push(res[0]);
     closeModal('modal-dispute');
     const job=JOBS.find(j=>j.id===m.job_id),pmId=job?job.pm_id:null;
-    const notifIds=[...new Set([...getAdminOmarIds(),pmId].filter(id=>id&&id!==currentUser.id))];
+   const fieldSuperIds=PROFILES.filter(p=>p.role==='field_super').map(p=>p.id);
+const notifIds=[...new Set([...getAdminOmarIds(),...fieldSuperIds,pmId].filter(id=>id&&id!==currentUser.id))];
     await e5SendNotif(notifIds,'dispute','🟡 Dispute filed on '+m.pc_mark+'-'+String(inst.instance_num).padStart(2,'0')+' ('+(job?job.name:'')+') by '+currentUser.name+(note?' — '+note.slice(0,60):''),m.job_id,instId);
     await logAction(m.job_id,mid,m.pc_mark,'DISPUTE FILED','inst #'+inst.instance_num);
     openMemberDetail(mid);renderMembers();renderDashboard();
@@ -1113,7 +1114,8 @@ async function submitDeliveryRequest(mid){
     const res=await sb.insert('delivery_requests',batch);if(res)res.forEach(r=>DELIVERY_REQUESTS.push(r));
     closeModal('modal-delivery-request');
     const job=JOBS.find(j=>j.id===m.job_id),pmId=job?job.pm_id:null;
-    const notifIds=[...new Set([...getAdminOmarIds(),pmId].filter(id=>id&&id!==currentUser.id))];
+    const fieldSuperIds=PROFILES.filter(p=>p.role==='field_super').map(p=>p.id);
+const notifIds=[...new Set([...getAdminOmarIds(),...fieldSuperIds,pmId].filter(id=>id&&id!==currentUser.id))];
     await e5SendNotif(notifIds,'delivery_request','🚛 Delivery requested for '+selected.length+' pc(s) of '+m.pc_mark+' by '+currentUser.name+' — '+fmtDelivDate(dateVal),m.job_id,null);
     await logAction(m.job_id,mid,m.pc_mark,'DELIVERY REQUESTED',dateVal+' x'+selected.length);
     openMemberDetail(mid);renderMembers();renderDashboard();showAlert('Delivery request submitted.','success');
