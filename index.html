@@ -1507,11 +1507,10 @@ function parseSDS2(text){
     const f=pr(line);if(!f||f.length<4)continue;
     const [qu,qt,desc,pcm]=f,len=f[4]||'',wu=f[5]||'',wt=f[6]||'',rem=f[7]||'',mm=f[8]||'',gr=f[9]||'';
     if(qu==='QTY'||qu==='UNIT'){inFB=false;continue;}if(!desc&&!pcm)continue;if(desc==='FIELD BOLTS'){inFB=true;continue;}
-    const isHW=['Dia','NUT','WASHER','TWS','REB#'].some(x=>desc.includes(x));
+   const isHW=['Dia','NUT','WASHER','TWS','REB#'].some(x=>desc.includes(x));
     if(!qu&&pcm){inFB=false;cur={pc_mark:pcm,description:desc,qty:cq(qt),unit_weight_lbs:parseInt(wu)||null,total_weight_lbs:parseInt(wt)||null,components:[],field_bolts:[]};members.push(cur);}
-    else if(isHW&&cur){cur.field_bolts.push({description:desc,qty:cq(qt||qu),length:len,remarks:rem,is_field_bolt:inFB});}
-    else if(qu&&!pcm&&cur){cur.components.push({description:desc,qty_per_member:cq(qu),qty_total:cq(qt),length:len,unit_weight_lbs:parseInt(wu)||null,total_weight_lbs:parseInt(wt)||null,minor_mark:mm,steel_grade:gr,remarks:rem,is_field_bolt:inFB,is_main:cur.components.length===0});}
-  }return members;
+    else if(isHW&&cur){if(inFB){cur.field_bolts.push({description:desc,qty:cq(qt||qu),length:len,remarks:rem,is_field_bolt:true});}else{cur.components.push({description:desc,qty_per_member:cq(qt||qu),qty_total:null,length:len,unit_weight_lbs:null,total_weight_lbs:null,minor_mark:'',steel_grade:'',remarks:rem,is_field_bolt:false,is_main:false});}}
+    else if(qu&&!pcm&&cur){cur.components.push({description:desc,qty_per_member:cq(qu),qty_total:cq(qt),length:len,unit_weight_lbs:parseInt(wu)||null,total_weight_lbs:parseInt(wt)||null,minor_mark:mm,steel_grade:gr,remarks:rem,is_field_bolt:false,is_main:cur.components.length===0});}
 }
 async function doImport(){
   const name=document.getElementById('import-job-name').value.trim();if(!name)return alert('Job name required.');if(!parsedBOMData)return alert('Select a BOM file first.');
