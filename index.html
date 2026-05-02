@@ -277,6 +277,15 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
 .inline-edit-label{font-family:var(--fd);font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text2);min-width:120px;flex-shrink:0}
 .inline-edit-value{flex:1;color:var(--text);font-size:0.88rem}
 .detail-dirty-bar{display:none;position:sticky;bottom:0;background:var(--surface2);border-top:1px solid var(--border);padding:12px 24px;display:flex;gap:8px;justify-content:flex-end;margin:0 -24px -24px}
+.badge-staged{background:rgba(168,85,247,0.13);color:#c084fc;border:1px solid rgba(168,85,247,0.3)}
+.badge-bol{background:rgba(59,130,246,0.13);color:var(--blue);border:1px solid rgba(59,130,246,0.3)}
+.bol-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;transition:border-color 0.15s}
+.bol-card:hover{border-color:var(--border2)}
+.bol-card.bol-accepted{border-left:3px solid var(--green)}
+.bol-card.bol-open{border-left:3px solid var(--accent)}
+.bol-number{font-family:var(--fd);font-size:1.1rem;font-weight:900;letter-spacing:0.04em;color:var(--text)}
+.bol-meta{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.bol-member-row{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface2);border-radius:var(--radius);margin-bottom:4px;font-size:0.85rem}
 </style>
 </head>
 <body>
@@ -372,6 +381,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
         <option value="pending">Pending</option>
         <option value="partial-fab">Partial Fabricated</option>
         <option value="fabbed">Fully Fabricated</option>
+        <option value="staged">Staged / BOL</option>
         <option value="partial-del">Partial Delivered</option>
         <option value="delivered">Fully Delivered</option>
       </select>
@@ -515,6 +525,16 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- BOL PAGE -->
+  <div id="page-bol" class="page">
+    <div class="section-header">
+      <div class="section-title">Bills of Lading</div>
+      <button class="btn btn-primary" id="bol-create-btn" onclick="openCreateBOL()">+ New BOL</button>
+    </div>
+    <div class="filter-bar" id="bol-job-filter-bar"></div>
+    <div id="bol-list"></div>
   </div>
 
   <!-- SCHEDULE PAGE -->
@@ -868,8 +888,9 @@ function canClearDelivery(dr){
 
 let currentUser=null,currentSession=null,selectedJobFilter='all',myJobsOnly=false,parsedBOMData=null;
 let JOBS=[],MEMBERS=[],INSTANCES=[],COMPONENTS=[],BOLTS=[],AUDIT=[],NOTES=[],PROFILES=[],DRAWINGS=[];
-let DISPUTES=[],DELIVERY_REQUESTS=[],NOTIFICATIONS=[];
-let WELDER_LANES=[],SHOP_CALENDAR=[],SCHEDULE_ALLOCATIONS=[];
+  let DISPUTES=[],DELIVERY_REQUESTS=[],NOTIFICATIONS=[];
+  let WELDER_LANES=[],SHOP_CALENDAR=[],SCHEDULE_ALLOCATIONS=[];
+  let BOLS=[],BOL_MEMBERS=[],DRIVERS=[];
 
 function showLoading(msg='Loading...'){
   let el=document.getElementById('loading-overlay');
@@ -907,6 +928,7 @@ async function doLogout(){
   JOBS=[];MEMBERS=[];INSTANCES=[];COMPONENTS=[];BOLTS=[];AUDIT=[];NOTES=[];PROFILES=[];DRAWINGS=[];
   DISPUTES=[];DELIVERY_REQUESTS=[];NOTIFICATIONS=[];
   WELDER_LANES=[];SHOP_CALENDAR=[];SCHEDULE_ALLOCATIONS=[];
+  BOLS=[];BOL_MEMBERS=[];DRIVERS=[];
   localStorage.removeItem('e5_session');
   document.getElementById('login-page').style.display='flex';
   document.getElementById('app').classList.add('hidden');
@@ -933,12 +955,16 @@ async function loadAllData(){
       sb.select('welder_lanes','order=sort_order.asc'),
       sb.select('shop_calendar','order=date.asc'),
       sb.select('schedule_allocations','order=start_date.asc'),
+      sb.select('bills_of_lading','order=created_at.desc'),
+      sb.select('bol_members','order=created_at.asc'),
+      sb.select('drivers','order=name.asc'),
     ]);
-    const [jobs,members,instances,components,bolts,audit,notes,profiles,drawings,disputes,deliveries,notifs,lanes,calendar,allocations]=results.map(r=>r.status==='fulfilled'?r.value:[]);
+    const [jobs,members,instances,components,bolts,audit,notes,profiles,drawings,disputes,deliveries,notifs,lanes,calendar,allocations,bols,bolMembers,drivers]=results.map(r=>r.status==='fulfilled'?r.value:[]);
     JOBS=jobs||[];MEMBERS=members||[];INSTANCES=instances||[];COMPONENTS=components||[];BOLTS=bolts||[];
     AUDIT=audit||[];NOTES=notes||[];PROFILES=profiles||[];DRAWINGS=drawings||[];
     DISPUTES=disputes||[];DELIVERY_REQUESTS=deliveries||[];NOTIFICATIONS=notifs||[];
     WELDER_LANES=lanes||[];SHOP_CALENDAR=calendar||[];SCHEDULE_ALLOCATIONS=allocations||[];
+    BOLS=bols||[];BOL_MEMBERS=bolMembers||[];DRIVERS=drivers||[];
     buildPmColors();renderNotifBell();
   }catch(e){showAlert('Error loading data: '+e.message,'error');}
   finally{hideLoading();}
@@ -953,10 +979,11 @@ const PAGES=[
   {id:'jobs',label:'Jobs',roles:['admin','pm','shop_mgr']},
   {id:'schedule',label:'Schedule',roles:['admin','pm','shop_mgr','fabricator','field_super']},
   {id:'job-detail',label:'Job Detail',roles:['admin','pm','shop_mgr','fabricator','field_super']},
+  {id:'bol',label:'BOL',roles:['admin','pm','shop_mgr','fabricator','driver','field_super']},
   {id:'log',label:'Log',roles:['admin','pm','shop_mgr']},
   {id:'admin',label:'Admin',roles:['admin']},
 ];
-const PAGE_ICONS={dashboard:'🏠',scan:'📷',members:'🔩',components:'🔧',bolts:'⚙️',jobs:'📋',schedule:'📅',log:'📜',admin:'👤'};
+const PAGE_ICONS={dashboard:'🏠',scan:'📷',members:'🔩',components:'🔧',bolts:'⚙️',jobs:'📋',bol:'🚚',schedule:'📅',log:'📜',admin:'👤'};
 
 const HIDDEN_NAV_PAGES=['job-detail'];
 function buildNav(){
@@ -986,6 +1013,7 @@ function navigateTo(pid){
   if(pid==='jobs')renderJobs();
   if(pid==='job-detail')renderJobDetail();
   if(pid==='schedule'){renderGantt();const cb=document.getElementById('gantt-cal-btn-wrap');if(cb)cb.style.display=['admin','shop_mgr'].includes(currentUser.role)?'':'none';}
+  if(pid==='bol')renderBOLPage();
   if(pid==='log')renderLog();
   if(pid==='admin')renderAdmin();
 }
@@ -994,8 +1022,8 @@ function navigateTo(pid){
 function getMemberInstances(mid){return INSTANCES.filter(i=>i.member_id===mid);}
 function getMemberStatus(mid){
   const ins=getMemberInstances(mid);if(!ins.length)return 'pending';
-  const tot=ins.length,del=ins.filter(i=>i.status==='delivered').length,fabAll=ins.filter(i=>i.status!=='pending').length;
-  if(del===tot)return 'delivered';if(del>0)return 'partial-del';if(fabAll===tot)return 'fabbed';if(fabAll>0)return 'partial-fab';return 'pending';
+  const tot=ins.length,del=ins.filter(i=>i.status==='delivered').length,fabAll=ins.filter(i=>['fabbed','field-cut','staged'].includes(i.status)).length,staged=ins.filter(i=>i.status==='staged').length;
+  if(del===tot)return 'delivered';if(del>0)return 'partial-del';if(staged>0&&fabAll===tot-del)return 'staged';if(fabAll===tot)return 'fabbed';if(fabAll>0)return 'partial-fab';return 'pending';
 }
 function getFabCount(mid){return getMemberInstances(mid).filter(i=>i.status!=='pending').length;}
 function getDelCount(mid){return getMemberInstances(mid).filter(i=>i.status==='delivered').length;}
@@ -1008,7 +1036,7 @@ function resolveInstance(memberId,instId,targetStatus){
   return null;
 }
 function statusBadge(s){
-  const m={'pending':'<span class="badge badge-pending">Pending</span>','partial-fab':'<span class="badge badge-partial">Partial Fab</span>','fabbed':'<span class="badge badge-fabbed">Fabricated</span>','partial-del':'<span class="badge badge-partdel">Partial Del</span>','delivered':'<span class="badge badge-delivered">Delivered</span>'};
+  const m={'pending':'<span class="badge badge-pending">Pending</span>','partial-fab':'<span class="badge badge-partial">Partial Fab</span>','fabbed':'<span class="badge badge-fabbed">Fabricated</span>','partial-del':'<span class="badge badge-partdel">Partial Del</span>','delivered':'<span class="badge badge-delivered">Delivered</span>','staged':'<span class="badge badge-staged">Staged / BOL</span>'};
   return m[s]||m['pending'];
 }
 
@@ -2624,6 +2652,293 @@ function openGanttPanel(jobId){
 }
 function closeGanttPanel(){document.getElementById('gantt-job-panel').style.display='none';ganttPanelJobId=null;}
 
+/* ══════════════════════════════════════════════
+   BOL ENGINE
+   ══════════════════════════════════════════════ */
+let currentBOLId=null;
+let bolJobFilter='all';
+
+function canCreateBOL(){
+  return['admin','pm','shop_mgr','field_super','driver','fabricator'].includes(currentUser?.role);
+}
+
+/* ── BOL number generator: "Job Name 001" sequential per job ── */
+function nextBOLNumber(jobId){
+  const j=JOBS.find(x=>x.id===jobId);if(!j)return'BOL-001';
+  const existing=BOLS.filter(b=>b.job_id===jobId);
+  const n=existing.length+1;
+  return j.name+' '+String(n).padStart(3,'0');
+}
+
+/* ── Render BOL page ── */
+function renderBOLPage(){
+  // Job filter bar
+  const filterBar=document.getElementById('bol-job-filter-bar');
+  filterBar.innerHTML='<span class="job-pill '+(bolJobFilter==='all'?'active':'')+'" onclick="bolJobFilter=\'all\';renderBOLPage()">All Jobs</span>';
+  JOBS.forEach(j=>{
+    const pmColor=getPmColor(j.pm_id);
+    filterBar.innerHTML+='<span class="job-pill '+(bolJobFilter===j.id?'active':'')+'" onclick="bolJobFilter=\''+j.id+'\';renderBOLPage()" style="border-left:3px solid '+pmColor+'">'+j.name+'</span>';
+  });
+  const showCreate=canCreateBOL();
+  document.getElementById('bol-create-btn').style.display=showCreate?'':'none';
+  const filtered=bolJobFilter==='all'?BOLS:BOLS.filter(b=>b.job_id===bolJobFilter);
+  const list=document.getElementById('bol-list');
+  if(!filtered.length){
+    list.innerHTML='<div class="card"><div class="text-muted" style="text-align:center;padding:32px">No BOLs yet.'+(showCreate?' Click "+ New BOL" to create one.':'')+'</div></div>';
+    return;
+  }
+  list.innerHTML=filtered.map(bol=>{
+    const j=JOBS.find(x=>x.id===bol.job_id);
+    const bm=BOL_MEMBERS.filter(bm=>bm.bol_id===bol.id);
+    const pmColor=getPmColor(j?j.pm_id:null);
+    const isAccepted=!!bol.accepted_at;
+    const statusBadgeHTML=isAccepted?
+      '<span class="badge badge-delivered">Accepted</span>':
+      '<span class="badge badge-partial">Open</span>';
+    return '<div class="bol-card '+(isAccepted?'bol-accepted':'bol-open')+'" style="cursor:pointer" onclick="openBOLDetail(\''+bol.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'+
+      '<div>'+
+      '<div class="bol-number">'+escHtml(bol.bol_number)+'</div>'+
+      '<div class="bol-meta">'+
+      '<span style="display:inline-flex;align-items:center;gap:4px"><span class="pm-dot" style="background:'+pmColor+'"></span>'+(j?j.name:'Unknown Job')+'</span>'+
+      ' &nbsp;·&nbsp; Driver: <strong>'+(bol.driver_name||'—')+'</strong>'+
+      (bol.delivery_date?' &nbsp;·&nbsp; 📅 '+bol.delivery_date:'')+
+      ' &nbsp;·&nbsp; '+bm.length+' member'+(bm.length!==1?'s':'')+
+      '</div>'+
+      (bol.notes?'<div style="font-size:0.75rem;color:var(--text2);margin-top:3px;font-style:italic">'+escHtml(bol.notes)+'</div>':'')+
+      (isAccepted?'<div style="font-size:0.72rem;color:var(--green);margin-top:4px">✓ Accepted by '+escHtml(bol.accepted_by_name||'?')+' on '+fmtDate(bol.accepted_at)+'</div>':'')+
+      '</div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+statusBadgeHTML+'</div>'+
+      '</div>'+
+      '</div>';
+  }).join('');
+}
+
+/* ── Open create BOL modal ── */
+function openCreateBOL(){
+  if(!canCreateBOL())return;
+  // Populate job select
+  const sel=document.getElementById('bol-job-select');
+  sel.innerHTML='<option value="">-- Select Job --</option>';
+  JOBS.forEach(j=>sel.innerHTML+='<option value="'+j.id+'">'+j.name+(j.number?' ('+j.number+')':'')+'</option>');
+  // Populate driver select
+  const dsel=document.getElementById('bol-driver-select');
+  dsel.innerHTML='<option value="">-- Select Driver --</option>';
+  DRIVERS.forEach(d=>dsel.innerHTML+='<option value="'+escHtml(d.name)+'">'+escHtml(d.name)+'</option>');
+  dsel.innerHTML+='<option value="__manual__">Enter manually...</option>';
+  document.getElementById('bol-driver-manual-wrap').style.display='none';
+  document.getElementById('bol-driver-manual').value='';
+  document.getElementById('bol-delivery-date').value='';
+  document.getElementById('bol-notes').value='';
+  document.getElementById('bol-member-select-wrap').style.display='none';
+  document.getElementById('bol-member-checklist').innerHTML='';
+  // Pre-select job if filter is active
+  if(bolJobFilter!=='all'){sel.value=bolJobFilter;bolJobChanged();}
+  openModal('modal-create-bol');
+}
+
+function bolDriverSelectChanged(){
+  const val=document.getElementById('bol-driver-select').value;
+  document.getElementById('bol-driver-manual-wrap').style.display=val==='__manual__'?'':'none';
+}
+
+function bolJobChanged(){
+  const jobId=document.getElementById('bol-job-select').value;
+  const wrap=document.getElementById('bol-member-select-wrap');
+  if(!jobId){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  renderBOLMemberChecklist(jobId);
+}
+
+function renderBOLMemberChecklist(jobId){
+  const members=MEMBERS.filter(m=>m.job_id===jobId);
+  const checklist=document.getElementById('bol-member-checklist');
+  if(!members.length){checklist.innerHTML='<div class="text-muted" style="font-size:0.82rem;padding:8px">No members on this job.</div>';return;}
+  checklist.innerHTML=members.map(m=>{
+    const ms=getMemberStatus(m.id);
+    const fc=getFabCount(m.id),dc=getDelCount(m.id);
+    // Eligible = has at least one fabbed instance not yet delivered and not already on an open BOL
+    const onOpenBOL=BOL_MEMBERS.some(bm=>bm.member_id===m.id&&BOLS.find(b=>b.id===bm.bol_id&&!b.accepted_at));
+    const eligible=fc>dc&&!onOpenBOL;
+    return '<label style="display:flex;align-items:center;gap:10px;cursor:'+(eligible?'pointer':'default')+';background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;opacity:'+(eligible?1:0.45)+'">'+
+      '<input type="checkbox" class="bol-member-cb" value="'+m.id+'" '+(eligible?'':'disabled')+' style="width:auto;margin:0;cursor:'+(eligible?'pointer':'default')+'">'+
+      '<div style="flex:1">'+
+      '<div style="display:flex;align-items:center;gap:6px"><strong class="text-accent" style="font-family:var(--fd);font-size:0.95rem">'+m.pc_mark+'</strong>'+statusBadge(ms)+(onOpenBOL?'<span class="badge badge-bol" style="font-size:0.6rem">On BOL</span>':'')+'</div>'+
+      '<div style="font-size:0.75rem;color:var(--text2);margin-top:2px">'+m.description+' &nbsp;·&nbsp; Fab\'d: '+fc+'/'+m.qty+' &nbsp;·&nbsp; Del\'d: '+dc+'/'+m.qty+'</div>'+
+      '</div></label>';
+  }).join('');
+}
+
+function bolSelectAllMembers(){document.querySelectorAll('.bol-member-cb:not(:disabled)').forEach(cb=>cb.checked=true);}
+function bolClearMembers(){document.querySelectorAll('.bol-member-cb').forEach(cb=>cb.checked=false);}
+
+/* ── Create BOL ── */
+async function doCreateBOL(){
+  const jobId=document.getElementById('bol-job-select').value;
+  if(!jobId)return showAlert('Select a job.','warn');
+  const driverSel=document.getElementById('bol-driver-select').value;
+  const driverManual=document.getElementById('bol-driver-manual').value.trim();
+  const driverName=driverSel==='__manual__'?driverManual:(driverSel||'');
+  const deliveryDate=document.getElementById('bol-delivery-date').value||null;
+  const notes=document.getElementById('bol-notes').value.trim()||null;
+  const selectedMemberIds=[...document.querySelectorAll('.bol-member-cb:checked')].map(cb=>cb.value);
+  if(!selectedMemberIds.length)return showAlert('Select at least one member.','warn');
+  const bolNumber=nextBOLNumber(jobId);
+  showLoading('Creating BOL...');
+  try{
+    const now=new Date().toISOString();
+    // Insert BOL record
+    const bolRec={job_id:jobId,bol_number:bolNumber,driver_name:driverName||null,delivery_date:deliveryDate,notes,status:'open',created_by:currentUser.id,created_by_name:currentUser.name,created_at:now};
+    const bolRes=await sb.insert('bills_of_lading',bolRec);
+    const bol=bolRes[0];BOLS.unshift(bol);
+    // Insert BOL members + update member status to 'staged'
+    const bmBatch=selectedMemberIds.map(mid=>({bol_id:bol.id,member_id:mid,job_id:jobId,added_at:now}));
+    const bmRes=await sb.insert('bol_members',bmBatch);if(bmRes)BOL_MEMBERS.push(...bmRes);
+    // Mark all instances of selected members as staged (where currently fabbed/field-cut, not yet delivered)
+    for(const mid of selectedMemberIds){
+      const insts=getMemberInstances(mid).filter(i=>i.status==='fabbed'||i.status==='field-cut');
+      for(const inst of insts){
+        await sb.update('instances',{status:'staged'},'id=eq.'+inst.id);
+        Object.assign(inst,{status:'staged'});
+      }
+    }
+    await logAction(jobId,null,'(BOL)','BOL CREATED',bolNumber+' · '+selectedMemberIds.length+' members');
+    // Notify relevant users
+    const j=JOBS.find(x=>x.id===jobId);
+    const fieldSuperIds=PROFILES.filter(p=>p.role==='field_super').map(p=>p.id);
+    const notifIds=[...new Set([...getAdminOmarIds(),...fieldSuperIds,j?.pm_id].filter(id=>id&&id!==currentUser.id))];
+    await e5SendNotif(notifIds,'bol','🚚 BOL created: '+bolNumber+' ('+selectedMemberIds.length+' members) by '+currentUser.name,jobId,null);
+    closeModal('modal-create-bol');
+    renderBOLPage();renderMembers();renderDashboard();
+    showAlert(bolNumber+' created.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+
+/* ── Open BOL detail ── */
+function openBOLDetail(bolId){
+  currentBOLId=bolId;
+  const bol=BOLS.find(x=>x.id===bolId);if(!bol)return;
+  const j=JOBS.find(x=>x.id===bol.job_id);
+  const bm=BOL_MEMBERS.filter(x=>x.bol_id===bolId);
+  const isAccepted=!!bol.accepted_at;
+  document.getElementById('bol-detail-title').textContent=bol.bol_number;
+  document.getElementById('bol-detail-sub').textContent=(j?j.name:'')+(bol.delivery_date?' · 📅 '+bol.delivery_date:'')+(bol.driver_name?' · Driver: '+bol.driver_name:'');
+  document.getElementById('bol-accept-btn').style.display=isAccepted?'none':'';
+  let html='';
+  // Status + meta
+  html+='<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">'+
+    (isAccepted?'<span class="badge badge-delivered">✓ Accepted</span>':'<span class="badge badge-partial">Open</span>')+
+    '<span style="font-size:0.82rem;color:var(--text2)">Created by '+escHtml(bol.created_by_name||'?')+' on '+fmtDate(bol.created_at)+'</span>'+
+    (isAccepted?'<span style="font-size:0.82rem;color:var(--green)">Accepted by '+escHtml(bol.accepted_by_name||'?')+' on '+fmtDate(bol.accepted_at)+'</span>':'')+
+    '</div>';
+  if(bol.notes)html+='<div class="alert alert-info" style="margin-bottom:12px;font-size:0.82rem">'+escHtml(bol.notes)+'</div>';
+  // Member list
+  html+='<div class="section-sub-label">Members ('+bm.length+')</div>';
+  if(bm.length){
+    html+=bm.map(bmRow=>{
+      const m=MEMBERS.find(x=>x.id===bmRow.member_id);if(!m)return'';
+      const ms=getMemberStatus(m.id);const fc=getFabCount(m.id),dc=getDelCount(m.id);
+      return '<div class="bol-member-row">'+
+        '<div>'+
+        '<strong class="text-accent" style="font-family:var(--fd);font-size:0.95rem;cursor:pointer" onclick="closeModal(\'modal-bol-detail\');openMemberDetail(\''+m.id+'\')">'+m.pc_mark+'</strong>'+
+        '<span style="font-size:0.75rem;color:var(--text2);margin-left:8px">'+m.description+'</span>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;align-items:center">'+
+        '<span style="font-size:0.75rem;color:var(--text2)">'+fc+' fab / '+dc+' del</span>'+
+        statusBadge(ms)+
+        '</div>'+
+        '</div>';
+    }).join('');
+  }else{html+='<div class="text-muted" style="font-size:0.82rem;padding:8px">No members on this BOL.</div>';}
+  document.getElementById('bol-detail-body').innerHTML=html;
+  openModal('modal-bol-detail');
+}
+
+/* ── Accept delivery ── */
+async function acceptBOL(){
+  const bol=BOLS.find(x=>x.id===currentBOLId);if(!bol||bol.accepted_at)return;
+  if(!confirm('Mark all members on '+bol.bol_number+' as Delivered?'))return;
+  showLoading('Accepting delivery...');
+  try{
+    const now=new Date().toISOString();
+    const bm=BOL_MEMBERS.filter(x=>x.bol_id===bol.id);
+    // Update instances: staged → delivered
+    for(const bmRow of bm){
+      const insts=getMemberInstances(bmRow.member_id).filter(i=>i.status==='staged');
+      for(const inst of insts){
+        await sb.update('instances',{status:'delivered',delivered_by:currentUser.id,delivered_at:now,method:'bol'},'id=eq.'+inst.id);
+        Object.assign(inst,{status:'delivered',delivered_by:currentUser.id,delivered_at:now,method:'bol'});
+      }
+    }
+    // Mark BOL as accepted
+    const updates={status:'accepted',accepted_by:currentUser.id,accepted_by_name:currentUser.name,accepted_at:now};
+    await sb.update('bills_of_lading',updates,'id=eq.'+bol.id);Object.assign(bol,updates);
+    await logAction(bol.job_id,null,'(BOL)','BOL ACCEPTED',bol.bol_number);
+    // Notify
+    const j=JOBS.find(x=>x.id===bol.job_id);
+    const fieldSuperIds=PROFILES.filter(p=>p.role==='field_super').map(p=>p.id);
+    const notifIds=[...new Set([...getAdminOmarIds(),...fieldSuperIds,j?.pm_id].filter(id=>id&&id!==currentUser.id))];
+    await e5SendNotif(notifIds,'bol','✅ BOL accepted: '+bol.bol_number+' by '+currentUser.name,bol.job_id,null);
+    closeModal('modal-bol-detail');
+    renderBOLPage();renderMembers();renderDashboard();
+    showAlert(bol.bol_number+' accepted — members marked Delivered.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+
+/* ── Print BOL ── */
+function printBOL(){
+  const bol=BOLS.find(x=>x.id===currentBOLId);if(!bol)return;
+  const j=JOBS.find(x=>x.id===bol.job_id);
+  const bm=BOL_MEMBERS.filter(x=>x.bol_id===bol.id);
+  const rows=bm.map(bmRow=>{
+    const m=MEMBERS.find(x=>x.id===bmRow.member_id);if(!m)return'';
+    const fc=getFabCount(m.id),dc=getDelCount(m.id);
+    return '<tr><td>'+escHtml(m.pc_mark)+'</td><td>'+escHtml(m.description)+'</td><td>'+m.qty+'</td><td>'+fc+'</td><td>'+dc+'</td><td style="width:80px">&nbsp;</td></tr>';
+  }).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>${bol.bol_number}</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:32px;color:#000;font-size:13px}
+    h1{font-size:22px;margin:0 0 4px}
+    .meta{font-size:12px;color:#555;margin-bottom:20px}
+    table{width:100%;border-collapse:collapse;margin-top:16px}
+    th{background:#f0f0f0;border:1px solid #ccc;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em}
+    td{border:1px solid #ddd;padding:8px 10px;vertical-align:top}
+    tr:nth-child(even) td{background:#fafafa}
+    .header-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;padding:14px;border:1px solid #ccc;border-radius:4px}
+    .field-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:2px}
+    .field-value{font-size:14px;font-weight:700}
+    .sig-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+    .sig-line{border-top:1px solid #000;padding-top:6px;font-size:11px;color:#555}
+    @media print{body{margin:16px}}
+  </style></head><body>
+  <h1>BILL OF LADING</h1>
+  <div class="meta">Echo-5 Steel Tracker &nbsp;·&nbsp; Sherwood Welding LLC</div>
+  <div class="header-grid">
+    <div><div class="field-label">BOL Number</div><div class="field-value">${escHtml(bol.bol_number)}</div></div>
+    <div><div class="field-label">Job</div><div class="field-value">${escHtml(j?j.name:'—')}${j&&j.number?' ('+escHtml(j.number)+')':''}</div></div>
+    <div><div class="field-label">Driver</div><div class="field-value">${escHtml(bol.driver_name||'—')}</div></div>
+    <div><div class="field-label">Delivery Date</div><div class="field-value">${bol.delivery_date||'—'}</div></div>
+    <div><div class="field-label">Created By</div><div class="field-value">${escHtml(bol.created_by_name||'—')}</div></div>
+    <div><div class="field-label">Date Printed</div><div class="field-value">${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
+  </div>
+  ${bol.notes?'<div style="padding:10px 14px;background:#fffbe6;border:1px solid #e6d800;border-radius:4px;margin-bottom:12px;font-size:12px"><strong>Notes:</strong> '+escHtml(bol.notes)+'</div>':''}
+  <table>
+    <thead><tr><th>PC Mark</th><th>Description</th><th>Total Qty</th><th>Fab'd</th><th>Del'd</th><th>Received ✓</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="sig-row">
+    <div><div class="sig-line">Driver Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div>
+    <div><div class="sig-line">Received By &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div>
+  </div>
+  </body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),400);
+}
+
+/* ── Member status badge: add staged ── */
+// (statusBadge function patched below)
+
 /* ── UTILS ── */
 function showAlert(msg,type='success'){
   const a=document.createElement('div');a.className='alert alert-'+type;a.style='position:fixed;top:70px;right:20px;z-index:9999;max-width:380px;animation:fadeIn 0.2s ease';
@@ -2739,6 +3054,73 @@ async function toggleSaturday(laneId,val){
     <div id="cal-sat-list"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-secondary" onclick="closeModal('modal-shop-calendar')">Close</button>
+    </div>
+  </div>
+</div>
+<!-- CREATE BOL MODAL -->
+<div class="modal-overlay" id="modal-create-bol">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">New Bill of Lading</div>
+      <button class="modal-close" onclick="closeModal('modal-create-bol')">&#x2715;</button>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Job <span style="color:var(--red)">*</span></label>
+        <select id="bol-job-select" onchange="bolJobChanged()">
+          <option value="">-- Select Job --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Driver</label>
+        <select id="bol-driver-select" onchange="bolDriverSelectChanged()">
+          <option value="">-- Select Driver --</option>
+          <option value="__manual__">Enter manually...</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="bol-driver-manual-wrap" style="display:none">
+      <label>Driver Name (manual)</label>
+      <input id="bol-driver-manual" placeholder="e.g. John Smith">
+    </div>
+    <div class="form-group">
+      <label>Delivery Date</label>
+      <input type="date" id="bol-delivery-date">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <input id="bol-notes" placeholder="Optional load notes">
+    </div>
+    <div id="bol-member-select-wrap" style="display:none">
+      <div class="section-sub-label">Select Members to Include</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn btn-sm btn-secondary" onclick="bolSelectAllMembers()">Select All Eligible</button>
+        <button class="btn btn-sm btn-secondary" onclick="bolClearMembers()">Clear</button>
+      </div>
+      <div id="bol-member-checklist" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-create-bol')">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreateBOL()">Create BOL</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOL DETAIL MODAL -->
+<div class="modal-overlay" id="modal-bol-detail">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="bol-detail-title">BOL Detail</div>
+        <div class="text-muted" style="font-size:0.82rem;margin-top:3px" id="bol-detail-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-bol-detail')">&#x2715;</button>
+    </div>
+    <div id="bol-detail-body"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-secondary" onclick="closeModal('modal-bol-detail')">Close</button>
+      <button class="btn btn-secondary" id="bol-print-btn" onclick="printBOL()">&#x1F5A8; Print</button>
+      <button class="btn btn-primary" id="bol-accept-btn" onclick="acceptBOL()">&#x2705; Accept Delivery</button>
     </div>
   </div>
 </div>
