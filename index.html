@@ -447,8 +447,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
         <div class="card">
           <div class="card-title">Job Info</div>
           <div id="detail-overview-fields"></div>
-          <div id="detail-dirty-bar" style="display:none;margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
-          </div>
         </div>
         <div>
           <div class="card">
@@ -461,9 +459,13 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
           </div>
         </div>
       </div>
+      <div id="detail-dirty-bar" style="display:none;padding:12px 0;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="cancelDetailEdit()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveDetailJob()">Save Changes</button>
+      </div>
     </div>
-    <!-- PHASES TAB -->
-    <div class="detail-tab-panel" id="detail-panel-phases">
+    <!-- PHASES TAB --> 
+        <div class="detail-tab-panel" id="detail-panel-phases">
       <div class="section-header">
         <div style="font-size:0.85rem;color:var(--text2)">Phases let you split a job into independently scheduled segments. Members default to Phase I.</div>
         <button class="btn btn-primary btn-sm" onclick="addPhase()">+ Add Phase</button>
@@ -766,6 +768,30 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-secondary" onclick="closeModal('modal-print')">Cancel</button>
       <button class="btn btn-primary" onclick="doPrint()">Print All Labels</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-phase">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Add Phase</div>
+      <button class="modal-close" onclick="closeModal('modal-add-phase')">&#x2715;</button>
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="phase-type-select" onchange="updatePhaseLabel()">
+        <option value="phase">Phase</option>
+        <option value="change_order">Change Order</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Label <span style="color:var(--red)">*</span></label>
+      <input id="phase-label-input" placeholder="e.g. Phase II, CO-1">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-phase')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddPhase()">Add</button>
     </div>
   </div>
 </div>
@@ -1750,14 +1776,16 @@ function renderDetailOverview(){
     (isJobBehind(j)?'<div class="job-behind-banner" style="margin-top:10px">⚠ Behind pace: '+Math.round(getJobBehindPct(j))+'% behind</div>':'');
 }
 
-function markDetailDirty(){
+ function markDetailDirty(){
   detailDirty=true;
   const bar=document.getElementById('detail-dirty-bar');
-  if(bar)bar.style.display='flex';
+  if(bar){bar.style.display='flex';}
 }
 
 function cancelDetailEdit(){
   detailDirty=false;
+  const bar=document.getElementById('detail-dirty-bar');
+  if(bar)bar.style.display='none';
   renderDetailOverview();
 }
 
@@ -1795,23 +1823,26 @@ async function saveDetailJob(){
 }
 
 /* ── PHASES ── */
+ 
 function renderDetailPhases(){
   const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
   const canEdit=['admin','pm','shop_mgr'].includes(currentUser.role);
   const list=document.getElementById('detail-phases-list');
   if(!PHASES.length){
-    list.innerHTML='<div class="card"><div class="text-muted" style="text-align:center;padding:20px">No additional phases. Click "+ Add Phase" to split this job into phases.</div></div>';
+    list.innerHTML='<div class="card"><div class="text-muted" style="text-align:center;padding:20px">No phases yet. Click "+ Add Phase" to split this job into phases or add a change order.</div></div>';
     return;
   }
-  // Show all phases including Phase I when there are multiple
-  const allPhases=[{id:'__phase1__',phase_number:1,name:'Phase I',scope:null,member_count:MEMBERS.filter(m=>m.job_id===j.id&&(!m.phase_id||m.phase_id===PHASES[0]?.id)).length},...PHASES.slice(1).map(p=>({...p,member_count:MEMBERS.filter(m=>m.phase_id===p.id).length}))];
   list.innerHTML=PHASES.map((p,idx)=>{
-    const memberCount=MEMBERS.filter(m=>m.job_id===j.id&&(idx===0?(!m.phase_id||m.phase_id===p.id):m.phase_id===p.id)).length;
-    const phaseName=PHASES.length>1?'Phase '+['I','II','III','IV','V','VI','VII','VIII','IX','X'][p.phase_number-1]:'';
+    const isFirst=idx===0;
+    const memberCount=MEMBERS.filter(m=>m.job_id===j.id&&(isFirst?(!m.phase_id||m.phase_id===p.id):m.phase_id===p.id)).length;
+    const typeBadge=p.segment_type==='change_order'?
+      '<span class="badge" style="background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.3);font-size:0.6rem">CO</span>':
+      '<span class="badge" style="background:rgba(249,115,22,0.15);color:var(--accent);border:1px solid rgba(249,115,22,0.3);font-size:0.6rem">PH</span>';
     return '<div class="phase-card" onclick="filterDetailMembersByPhase(\''+p.id+'\')">'+
       '<div style="display:flex;justify-content:space-between;align-items:center">'+
-      '<div class="phase-name">'+(phaseName||'Phase I')+'</div>'+
-      (canEdit&&idx>0?'<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePhase(\''+p.id+'\')">Remove</button>':'')+
+      '<div style="display:flex;align-items:center;gap:8px">'+typeBadge+
+      '<div class="phase-name">'+(p.label||'Phase I')+'</div></div>'+
+      (canEdit&&!isFirst?'<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePhase(\''+p.id+'\')">Remove</button>':'')+
       '</div>'+
       '<div class="phase-meta">'+memberCount+' member'+(memberCount!==1?'s':'')+
       (p.scope?'<span style="margin-left:12px;font-style:italic">'+escHtml(p.scope.slice(0,60))+(p.scope.length>60?'…':'')+'</span>':'')+
@@ -1819,37 +1850,58 @@ function renderDetailPhases(){
   }).join('');
 }
 
-async function addPhase(){
+function addPhase(){
+  // Auto-suggest label based on existing segments
+  const phaseCount=PHASES.filter(p=>p.segment_type==='phase'||!p.segment_type).length;
+  const coCount=PHASES.filter(p=>p.segment_type==='change_order').length;
+  document.getElementById('phase-type-select').value='phase';
+  document.getElementById('phase-label-input').value='Phase '+(phaseCount===1?'II':phaseCount===2?'III':phaseCount===3?'IV':phaseCount===4?'V':'VI');
+  openModal('modal-add-phase');
+}
+
+function updatePhaseLabel(){
+  const type=document.getElementById('phase-type-select').value;
+  if(type==='change_order'){
+    const coCount=PHASES.filter(p=>p.segment_type==='change_order').length;
+    document.getElementById('phase-label-input').value='CO-'+(coCount+1);
+  }else{
+    const phaseCount=PHASES.filter(p=>p.segment_type==='phase'||!p.segment_type).length;
+    const romans=['II','III','IV','V','VI','VII','VIII','IX','X'];
+    document.getElementById('phase-label-input').value='Phase '+(romans[phaseCount-1]||'II');
+  }
+}
+
+async function confirmAddPhase(){
+  const label=document.getElementById('phase-label-input').value.trim();
+  const segType=document.getElementById('phase-type-select').value;
+  if(!label)return showAlert('Label is required.','warn');
   const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
-  const nextNum=(PHASES.length||0)+1;
-  if(nextNum>10)return showAlert('Maximum 10 phases.','warn');
+  closeModal('modal-add-phase');
   showLoading('Adding phase...');
   try{
-    const rec={job_id:currentDetailJobId,phase_number:nextNum,name:'Phase '+['I','II','III','IV','V','VI','VII','VIII','IX','X'][nextNum-1]};
-    const res=await sb.insert('phases',rec);
-    if(res&&res[0]){
-      PHASES.push(res[0]);
-      // If this is the first added phase, create Phase I record too
-      if(PHASES.length===1){
-        const p1={job_id:currentDetailJobId,phase_number:1,name:'Phase I'};
-        const r1=await sb.insert('phases',p1);
-        if(r1&&r1[0])PHASES.unshift(r1[0]);
-      }
+    // Ensure Phase I exists first
+    if(!PHASES.length){
+      const p1={job_id:currentDetailJobId,phase_number:1,label:'Phase I',segment_type:'phase'};
+      const r1=await sb.insert('phases',p1);
+      if(r1&&r1[0])PHASES.push(r1[0]);
     }
+    const rec={job_id:currentDetailJobId,phase_number:PHASES.length+1,label,segment_type:segType};
+    const res=await sb.insert('phases',rec);
+    if(res&&res[0])PHASES.push(res[0]);
     if(!j.has_phases){
       await sb.update('jobs',{has_phases:true},'id=eq.'+currentDetailJobId);
       j.has_phases=true;
     }
     renderDetailPhases();
-    showAlert('Phase added.','success');
+    showAlert(label+' added.','success');
   }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
 }
 
 async function deletePhase(phaseId){
-  if(!confirm('Remove this phase? Members assigned to it will be moved to Phase I.'))return;
+  const p=PHASES.find(x=>x.id===phaseId);
+  if(!confirm('Remove "'+(p?.label||'this phase')+'"? Members assigned to it will move to Phase I.'))return;
   const phase1=PHASES[0];
   try{
-    // Move members to phase I
     await sb.update('members',{phase_id:phase1?.id||null},'phase_id=eq.'+phaseId);
     MEMBERS.filter(m=>m.phase_id===phaseId).forEach(m=>m.phase_id=phase1?.id||null);
     await sb.delete('phases','id=eq.'+phaseId);
@@ -1863,7 +1915,6 @@ function filterDetailMembersByPhase(phaseId){
   detailPhaseFilter=phaseId;
   switchDetailTab('members');
 }
-
 /* ── DRAWINGS ── */
 function renderDetailDrawings(){
   const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
@@ -1927,13 +1978,14 @@ async function deleteErectionDrawing(drawingId){
 /* ── DETAIL MEMBERS TAB ── */
 function renderDetailMembers(){
   const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
-  // Phase filter bar
+  const phase1=PHASES[0]||null;
   const filterBar=document.getElementById('detail-phase-filter');
   if(PHASES.length>1){
     filterBar.style.display='flex';
-    filterBar.innerHTML='<span class="job-pill '+(detailPhaseFilter===null?'active':'')+'" onclick="detailPhaseFilter=null;renderDetailMembers()">All Phases</span>'+
-      PHASES.map((p,idx)=>'<span class="job-pill '+(detailPhaseFilter===p.id?'active':'')+'" onclick="detailPhaseFilter=\''+p.id+'\';renderDetailMembers()">'+
-        'Phase '+['I','II','III','IV','V'][p.phase_number-1]+'</span>').join('');
+    filterBar.innerHTML=
+      '<span class="job-pill '+(detailPhaseFilter===null?'active':'')+'" onclick="detailPhaseFilter=null;renderDetailMembers()">All</span>'+
+      PHASES.map(p=>'<span class="job-pill '+(detailPhaseFilter===p.id?'active':'')+'" onclick="detailPhaseFilter=\''+p.id+'\';renderDetailMembers()">'+
+        escHtml(p.label||'Phase I')+'</span>').join('');
   }else{
     filterBar.style.display='none';
   }
@@ -1941,18 +1993,28 @@ function renderDetailMembers(){
   const sf=document.getElementById('detail-member-status-filter')?.value||'';
   let members=MEMBERS.filter(m=>{
     if(m.job_id!==j.id)return false;
-    if(detailPhaseFilter){if(m.phase_id!==detailPhaseFilter)return false;}
+    if(detailPhaseFilter!==null){
+      // Phase I catches members with null phase_id or phase_id matching phase1
+      if(detailPhaseFilter===phase1?.id){
+        if(m.phase_id!==null&&m.phase_id!==phase1.id)return false;
+      }else{
+        if(m.phase_id!==detailPhaseFilter)return false;
+      }
+    }
     if(sf&&getMemberStatus(m.id)!==sf)return false;
     if(search)return m.pc_mark.toLowerCase().includes(search)||m.description.toLowerCase().includes(search);
     return true;
   });
-  const phase1Id=PHASES[0]?.id||null;
   const tbody=document.getElementById('detail-members-tbody');
   tbody.innerHTML=members.map(m=>{
     const ms=getMemberStatus(m.id),fc=getFabCount(m.id),dc=getDelCount(m.id);
-    const phase=PHASES.find(p=>p.id===m.phase_id)||(PHASES.length?PHASES[0]:null);
-    const phaseLabel=PHASES.length>1?(phase?'Phase '+['I','II','III','IV','V'][(phase.phase_number||1)-1]:'Phase I'):'—';
     const hasDsp=getMemberHasDispute(m.id),hasDlv=getMemberHasDelivery(m.id);
+    // Resolve phase label — null phase_id = Phase I
+    let phaseLabel='—';
+    if(PHASES.length>1){
+      const assignedPhase=PHASES.find(p=>p.id===m.phase_id)||(m.phase_id===null?phase1:null);
+      phaseLabel=assignedPhase?escHtml(assignedPhase.label||'Phase I'):'Phase I';
+    }
     return '<tr><td><strong class="text-accent" style="cursor:pointer;font-family:var(--fd);font-size:1rem" onclick="openMemberDetail(\''+m.id+'\')">'+m.pc_mark+'</strong>'+
       (hasDsp?' 🟡':'')+(hasDlv?' 🚛':'')+
       '</td><td>'+m.description+'</td>'+
