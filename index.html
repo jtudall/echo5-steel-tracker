@@ -2692,10 +2692,12 @@ function renderBOLPage(){
     const bm=BOL_MEMBERS.filter(bm=>bm.bol_id===bol.id);
     const pmColor=getPmColor(j?j.pm_id:null);
     const isAccepted=!!bol.accepted_at;
-    const statusBadgeHTML=isAccepted?
-      '<span class="badge badge-delivered">Accepted</span>':
+    const isVoided=!!bol.voided_at;
+    const statusBadgeHTML=isVoided?
+      '<span class="badge badge-pending">Voided</span>':
+      isAccepted?'<span class="badge badge-delivered">Accepted</span>':
       '<span class="badge badge-partial">Open</span>';
-    return '<div class="bol-card '+(isAccepted?'bol-accepted':'bol-open')+'" style="cursor:pointer" onclick="openBOLDetail(\''+bol.id+'\')">'+
+    return '<div class="bol-card '+(isVoided?'':isAccepted?'bol-accepted':'bol-open')+'" style="cursor:pointer;'+(isVoided?'opacity:0.5':'')+'\" onclick="openBOLDetail(\''+bol.id+'\')">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'+
       '<div>'+
       '<div class="bol-number">'+escHtml(bol.bol_number)+'</div>'+
@@ -2726,7 +2728,6 @@ function openCreateBOL(){
   document.getElementById('bol-shipper').value='Sherwood Welding';
   document.getElementById('bol-deliver-to').value='';
   document.getElementById('bol-bol-date').value=new Date().toISOString().slice(0,10);
-  document.getElementById('bol-delivery-date').value='';
   document.getElementById('bol-notes').value='';
   document.getElementById('bol-member-select-wrap').style.display='none';
   document.getElementById('bol-member-checklist').innerHTML='';
@@ -2761,13 +2762,16 @@ function renderBOLMemberChecklist(jobId){
   checklist.innerHTML=members.map(m=>{
     const ms=getMemberStatus(m.id);
     const fc=getFabCount(m.id),dc=getDelCount(m.id);
-    // Eligible = has at least one fabbed instance not yet delivered and not already on an open BOL
-    const onOpenBOL=BOL_MEMBERS.some(bm=>bm.member_id===m.id&&BOLS.find(b=>b.id===bm.bol_id&&!b.accepted_at));
-    const eligible=fc>dc&&!onOpenBOL;
+    const onOpenBOL=BOL_MEMBERS.some(bm=>bm.member_id===m.id&&BOLS.find(b=>b.id===bm.bol_id&&!b.accepted_at&&!b.voided_at));
+    const isStaged=ms==='staged';
+    const eligible=fc>dc&&!onOpenBOL&&!isStaged;
+    let reasonTag='';
+    if(onOpenBOL)reasonTag='<span class="badge badge-bol" style="font-size:0.6rem">On BOL</span>';
+    else if(isStaged)reasonTag='<span class="badge badge-staged" style="font-size:0.6rem">Staged</span>';
     return '<label style="display:flex;align-items:center;gap:10px;cursor:'+(eligible?'pointer':'default')+';background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;opacity:'+(eligible?1:0.45)+'">'+
       '<input type="checkbox" class="bol-member-cb" value="'+m.id+'" '+(eligible?'':'disabled')+' style="width:auto;margin:0;cursor:'+(eligible?'pointer':'default')+'">'+
       '<div style="flex:1">'+
-      '<div style="display:flex;align-items:center;gap:6px"><strong class="text-accent" style="font-family:var(--fd);font-size:0.95rem">'+m.pc_mark+'</strong>'+statusBadge(ms)+(onOpenBOL?'<span class="badge badge-bol" style="font-size:0.6rem">On BOL</span>':'')+'</div>'+
+      '<div style="display:flex;align-items:center;gap:6px"><strong class="text-accent" style="font-family:var(--fd);font-size:0.95rem">'+m.pc_mark+'</strong>'+statusBadge(ms)+reasonTag+'</div>'+
       '<div style="font-size:0.75rem;color:var(--text2);margin-top:2px">'+m.description+' &nbsp;·&nbsp; Fab\'d: '+fc+'/'+m.qty+' &nbsp;·&nbsp; Del\'d: '+dc+'/'+m.qty+'</div>'+
       '</div></label>';
   }).join('');
@@ -2786,7 +2790,7 @@ async function doCreateBOL(){
   const bolDate=document.getElementById('bol-bol-date').value||new Date().toISOString().slice(0,10);
   const deliverTo=document.getElementById('bol-deliver-to').value.trim()||null;
   const shipper=document.getElementById('bol-shipper').value.trim()||'Sherwood Welding';
-  const deliveryDate=document.getElementById('bol-delivery-date').value||null;
+  const deliveryDate=null;
   const notes=document.getElementById('bol-notes').value.trim()||null;
   const selectedMemberIds=[...document.querySelectorAll('.bol-member-cb:checked')].map(cb=>cb.value);
   if(!selectedMemberIds.length)return showAlert('Select at least one member.','warn');
@@ -2830,7 +2834,9 @@ function openBOLDetail(bolId){
   const isAccepted=!!bol.accepted_at;
   document.getElementById('bol-detail-title').textContent=bol.bol_number;
   document.getElementById('bol-detail-sub').textContent=(j?j.name:'')+(bol.delivery_date?' · 📅 '+bol.delivery_date:'')+(bol.driver_name?' · Carrier: '+bol.driver_name:'');
-  document.getElementById('bol-accept-btn').style.display=isAccepted?'none':'';
+  const isVoided=!!bol.voided_at;
+  document.getElementById('bol-accept-btn').style.display=(isAccepted||isVoided)?'none':'';
+  document.getElementById('bol-delete-btn').style.display=canDeleteBOL(bol)&&!isAccepted?'':'none';
   let html='';
   // Status + meta
   html+='<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">'+
@@ -2838,6 +2844,7 @@ function openBOLDetail(bolId){
     '<span style="font-size:0.82rem;color:var(--text2)">Created by '+escHtml(bol.created_by_name||'?')+' on '+fmtDate(bol.created_at)+'</span>'+
     (isAccepted?'<span style="font-size:0.82rem;color:var(--green)">Accepted by '+escHtml(bol.accepted_by_name||'?')+' on '+fmtDate(bol.accepted_at)+'</span>':'')+
     '</div>';
+  if(bol.voided_at)html+='<div class="alert alert-error" style="margin-bottom:12px;font-size:0.82rem">⚠ VOIDED by '+escHtml(bol.voided_by_name||'?')+' on '+fmtDate(bol.voided_at)+'</div>';
   if(bol.notes)html+='<div class="alert alert-info" style="margin-bottom:12px;font-size:0.82rem">'+escHtml(bol.notes)+'</div>';
   // Member list
   html+='<div class="section-sub-label">Members ('+bm.length+')</div>';
@@ -2861,8 +2868,50 @@ function openBOLDetail(bolId){
   openModal('modal-bol-detail');
 }
 
-/* ── Accept delivery ── */
-async function acceptBOL(){
+/* ── Delete / Void BOL ── */
+function canDeleteBOL(bol){
+  if(currentUser.role==='admin')return true;
+  return bol.created_by===currentUser.id;
+}
+
+async function deleteBOL(bolId){
+  const bol=BOLS.find(x=>x.id===bolId);if(!bol)return;
+  // Determine if this is the last BOL for this job
+  const jobBOLs=BOLS.filter(b=>b.job_id===bol.job_id&&!b.voided_at).sort((a,b)=>a.created_at.localeCompare(b.created_at));
+  const isLast=jobBOLs[jobBOLs.length-1]?.id===bolId;
+  const action=isLast?'delete':'void';
+  if(!confirm((isLast?'Delete':'Void')+' BOL '+bol.bol_number+'?'+(isLast?' This cannot be undone.':' It will remain on record as voided.')))return;
+  showLoading((isLast?'Deleting':'Voiding')+' BOL...');
+  try{
+    const bm=BOL_MEMBERS.filter(x=>x.bol_id===bolId);
+    // Restore staged instances back to fabbed
+    for(const bmRow of bm){
+      const insts=getMemberInstances(bmRow.member_id).filter(i=>i.status==='staged');
+      for(const inst of insts){
+        await sb.update('instances',{status:'fabbed'},'id=eq.'+inst.id);
+        Object.assign(inst,{status:'fabbed'});
+      }
+    }
+    if(isLast){
+      // Hard delete
+      await sb.delete('bol_members','bol_id=eq.'+bolId);
+      await sb.delete('bills_of_lading','id=eq.'+bolId);
+      BOLS=BOLS.filter(b=>b.id!==bolId);
+      BOL_MEMBERS=BOL_MEMBERS.filter(bm=>bm.bol_id!==bolId);
+    }else{
+      // Soft void
+      const updates={voided_at:new Date().toISOString(),voided_by_name:currentUser.name};
+      await sb.update('bills_of_lading',updates,'id=eq.'+bolId);
+      Object.assign(bol,updates);
+    }
+    await logAction(bol.job_id,null,'(BOL)',action==='delete'?'BOL DELETED':'BOL VOIDED',bol.bol_number);
+    closeModal('modal-bol-detail');
+    renderBOLPage();renderMembers();renderDashboard();
+    showAlert(bol.bol_number+(isLast?' deleted.':' voided.'),'success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+
+/* ── Accept delivery ── */async function acceptBOL(){
   const bol=BOLS.find(x=>x.id===currentBOLId);if(!bol||bol.accepted_at)return;
   if(!confirm('Mark all members on '+bol.bol_number+' as Delivered?'))return;
   showLoading('Accepting delivery...');
@@ -3157,14 +3206,10 @@ async function toggleSaturday(laneId,val){
       <label>Carrier Name (manual)</label>
       <input id="bol-carrier-manual" placeholder="e.g. ABC Freight">
     </div>
-    <div class="grid-2">
+   <div class="grid-2">
       <div class="form-group">
         <label>BOL Date</label>
         <input type="date" id="bol-bol-date">
-      </div>
-      <div class="form-group">
-        <label>Delivery Date</label>
-        <input type="date" id="bol-delivery-date">
       </div>
       <div class="form-group">
         <label>Shipper/Consignor</label>
@@ -3207,6 +3252,7 @@ async function toggleSaturday(laneId,val){
     <div id="bol-detail-body"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="closeModal('modal-bol-detail')">Close</button>
+      <button class="btn btn-danger" id="bol-delete-btn" onclick="deleteBOL(currentBOLId)">🗑 Delete/Void</button>
       <button class="btn btn-secondary" id="bol-print-btn" onclick="printBOL()">&#x1F5A8; Print</button>
       <button class="btn btn-primary" id="bol-accept-btn" onclick="acceptBOL()">&#x2705; Accept Delivery</button>
     </div>
