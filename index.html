@@ -1734,7 +1734,7 @@ function renderDetailOverview(){
     '<div class="inline-edit-row"><span class="inline-edit-label">Fab Duration</span>'+
     (canEdit?'<input id="dj-duration" type="number" min="0.1" step="0.1" value="'+(j.duration_days||1)+'" oninput="markDetailDirty()" style="flex:1;max-width:100px"> <span style="font-size:0.75rem;color:'+(j.duration_confirmed?'var(--green)':'var(--yellow)')+'">'+( j.duration_confirmed?'✓ Confirmed'+(durConfBy?' by '+durConfBy.name:''):'⚠ Unconfirmed')+'</span>':'<span class="inline-edit-value">'+(j.duration_days||1)+' days</span>')+
     '</div>'+
-    (canEdit?'<div id="detail-dirty-bar" style="display:n'';
+    '';
 
   document.getElementById('detail-scope').value=j.scope||'';
 
