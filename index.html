@@ -448,8 +448,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
           <div class="card-title">Job Info</div>
           <div id="detail-overview-fields"></div>
           <div id="detail-dirty-bar" style="display:none;margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn btn-secondary" onclick="cancelDetailEdit()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveDetailJob()">Save Changes</button>
           </div>
         </div>
         <div>
@@ -744,7 +742,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
 </div>
 
 <div class="modal-overlay" id="modal-drawing-view">
-  <div class="modal" style="max-width:900px;height:90vh;display:flex;flex-direction:column">
+  <div class="modal" style="max-width:96vw;width:96vw;height:94vh;display:flex;flex-direction:column">
     <div class="modal-header" style="flex-shrink:0">
       <div class="modal-title" id="drawing-view-title">Shop Drawing</div>
       <button class="modal-close" onclick="closeModal('modal-drawing-view')">&#x2715;</button>
@@ -1736,7 +1734,7 @@ function renderDetailOverview(){
     '<div class="inline-edit-row"><span class="inline-edit-label">Fab Duration</span>'+
     (canEdit?'<input id="dj-duration" type="number" min="0.1" step="0.1" value="'+(j.duration_days||1)+'" oninput="markDetailDirty()" style="flex:1;max-width:100px"> <span style="font-size:0.75rem;color:'+(j.duration_confirmed?'var(--green)':'var(--yellow)')+'">'+( j.duration_confirmed?'✓ Confirmed'+(durConfBy?' by '+durConfBy.name:''):'⚠ Unconfirmed')+'</span>':'<span class="inline-edit-value">'+(j.duration_days||1)+' days</span>')+
     '</div>'+
-    (canEdit?'<div id="detail-dirty-bar" style="display:none;margin-top:16px;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="cancelDetailEdit()">Cancel</button><button class="btn btn-primary" onclick="saveDetailJob()">Save Changes</button></div>':'');
+    (canEdit?'<div id="detail-dirty-bar" style="display:n'';
 
   document.getElementById('detail-scope').value=j.scope||'';
 
@@ -1904,7 +1902,7 @@ async function uploadErectionDrawings(event){
       const path=currentDetailJobId+'/erection/'+Date.now()+'_'+file.name;
       const uploadRes=await fetch(SUPABASE_URL+'/storage/v1/object/drawings/'+path,{method:'POST',headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+currentSession.access_token,'Content-Type':'application/pdf'},body:file});
       if(!uploadRes.ok)continue;
-      const rec={job_id:currentDetailJobId,member_id:null,filename:file.name,storage_path:path,uploaded_by:currentUser.id,drawing_type:'erection'};
+      const rec={job_id:currentDetailJobId,filename:file.name,storage_path:path,drawing_type:'erection'};  
       const res=await sb.insert('drawings',rec);
       if(res&&res[0])ERECTION_DRAWINGS.push(res[0]);
     }
