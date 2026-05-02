@@ -2701,7 +2701,7 @@ function renderBOLPage(){
       '<div class="bol-number">'+escHtml(bol.bol_number)+'</div>'+
       '<div class="bol-meta">'+
       '<span style="display:inline-flex;align-items:center;gap:4px"><span class="pm-dot" style="background:'+pmColor+'"></span>'+(j?j.name:'Unknown Job')+'</span>'+
-      ' &nbsp;·&nbsp; Driver: <strong>'+(bol.driver_name||'—')+'</strong>'+
+      ' &nbsp;·&nbsp; Carrier: <strong>'+(bol.driver_name||'—')+'</strong>'+
       (bol.delivery_date?' &nbsp;·&nbsp; 📅 '+bol.delivery_date:'')+
       ' &nbsp;·&nbsp; '+bm.length+' member'+(bm.length!==1?'s':'')+
       '</div>'+
@@ -2717,35 +2717,39 @@ function renderBOLPage(){
 /* ── Open create BOL modal ── */
 function openCreateBOL(){
   if(!canCreateBOL())return;
-  // Populate job select
   const sel=document.getElementById('bol-job-select');
   sel.innerHTML='<option value="">-- Select Job --</option>';
   JOBS.forEach(j=>sel.innerHTML+='<option value="'+j.id+'">'+j.name+(j.number?' ('+j.number+')':'')+'</option>');
-  // Populate driver select
-  const dsel=document.getElementById('bol-driver-select');
-  dsel.innerHTML='<option value="">-- Select Driver --</option>';
-  DRIVERS.forEach(d=>dsel.innerHTML+='<option value="'+escHtml(d.name)+'">'+escHtml(d.name)+'</option>');
-  dsel.innerHTML+='<option value="__manual__">Enter manually...</option>';
-  document.getElementById('bol-driver-manual-wrap').style.display='none';
-  document.getElementById('bol-driver-manual').value='';
+  document.getElementById('bol-carrier-select').value='LH Trucking';
+  document.getElementById('bol-carrier-manual-wrap').style.display='none';
+  document.getElementById('bol-carrier-manual').value='';
+  document.getElementById('bol-shipper').value='Sherwood Welding';
+  document.getElementById('bol-deliver-to').value='';
+  document.getElementById('bol-bol-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('bol-delivery-date').value='';
   document.getElementById('bol-notes').value='';
   document.getElementById('bol-member-select-wrap').style.display='none';
   document.getElementById('bol-member-checklist').innerHTML='';
-  // Pre-select job if filter is active
-  if(bolJobFilter!=='all'){sel.value=bolJobFilter;bolJobChanged();}
+  if(bolJobFilter!=='all'){
+    sel.value=bolJobFilter;
+    bolJobChanged();
+  }
   openModal('modal-create-bol');
 }
 
-function bolDriverSelectChanged(){
-  const val=document.getElementById('bol-driver-select').value;
-  document.getElementById('bol-driver-manual-wrap').style.display=val==='__manual__'?'':'none';
+function bolCarrierSelectChanged(){
+  const val=document.getElementById('bol-carrier-select').value;
+  document.getElementById('bol-carrier-manual-wrap').style.display=val==='__manual__'?'':'none';
 }
 
 function bolJobChanged(){
   const jobId=document.getElementById('bol-job-select').value;
   const wrap=document.getElementById('bol-member-select-wrap');
   if(!jobId){wrap.style.display='none';return;}
+  // Pre-fill deliver-to from job address
+  const j=JOBS.find(x=>x.id===jobId);
+  const deliverTo=document.getElementById('bol-deliver-to');
+  if(j&&j.address&&!deliverTo.value)deliverTo.value=j.address;
   wrap.style.display='block';
   renderBOLMemberChecklist(jobId);
 }
@@ -2776,9 +2780,12 @@ function bolClearMembers(){document.querySelectorAll('.bol-member-cb').forEach(c
 async function doCreateBOL(){
   const jobId=document.getElementById('bol-job-select').value;
   if(!jobId)return showAlert('Select a job.','warn');
-  const driverSel=document.getElementById('bol-driver-select').value;
-  const driverManual=document.getElementById('bol-driver-manual').value.trim();
-  const driverName=driverSel==='__manual__'?driverManual:(driverSel||'');
+  const carrierSel=document.getElementById('bol-carrier-select').value;
+  const carrierManual=document.getElementById('bol-carrier-manual').value.trim();
+  const driverName=carrierSel==='__manual__'?carrierManual:(carrierSel||'');
+  const bolDate=document.getElementById('bol-bol-date').value||new Date().toISOString().slice(0,10);
+  const deliverTo=document.getElementById('bol-deliver-to').value.trim()||null;
+  const shipper=document.getElementById('bol-shipper').value.trim()||'Sherwood Welding';
   const deliveryDate=document.getElementById('bol-delivery-date').value||null;
   const notes=document.getElementById('bol-notes').value.trim()||null;
   const selectedMemberIds=[...document.querySelectorAll('.bol-member-cb:checked')].map(cb=>cb.value);
@@ -2788,7 +2795,7 @@ async function doCreateBOL(){
   try{
     const now=new Date().toISOString();
     // Insert BOL record
-    const bolRec={job_id:jobId,bol_number:bolNumber,driver_name:driverName||null,delivery_date:deliveryDate,notes,status:'open',created_by:currentUser.id,created_by_name:currentUser.name,created_at:now};
+    const bolRec={job_id:jobId,bol_number:bolNumber,driver_name:driverName||null,bol_date:bolDate,delivery_date:deliveryDate,deliver_to:deliverTo,shipper:shipper,notes,status:'open',created_by:currentUser.id,created_by_name:currentUser.name,created_at:now};
     const bolRes=await sb.insert('bills_of_lading',bolRec);
     const bol=bolRes[0];BOLS.unshift(bol);
     // Insert BOL members + update member status to 'staged'
@@ -2822,7 +2829,7 @@ function openBOLDetail(bolId){
   const bm=BOL_MEMBERS.filter(x=>x.bol_id===bolId);
   const isAccepted=!!bol.accepted_at;
   document.getElementById('bol-detail-title').textContent=bol.bol_number;
-  document.getElementById('bol-detail-sub').textContent=(j?j.name:'')+(bol.delivery_date?' · 📅 '+bol.delivery_date:'')+(bol.driver_name?' · Driver: '+bol.driver_name:'');
+  document.getElementById('bol-detail-sub').textContent=(j?j.name:'')+(bol.delivery_date?' · 📅 '+bol.delivery_date:'')+(bol.driver_name?' · Carrier: '+bol.driver_name:'');
   document.getElementById('bol-accept-btn').style.display=isAccepted?'none':'';
   let html='';
   // Status + meta
@@ -2890,46 +2897,112 @@ function printBOL(){
   const bol=BOLS.find(x=>x.id===currentBOLId);if(!bol)return;
   const j=JOBS.find(x=>x.id===bol.job_id);
   const bm=BOL_MEMBERS.filter(x=>x.bol_id===bol.id);
+  let totalQty=0,totalWeight=0;
   const rows=bm.map(bmRow=>{
     const m=MEMBERS.find(x=>x.id===bmRow.member_id);if(!m)return'';
-    const fc=getFabCount(m.id),dc=getDelCount(m.id);
-    return '<tr><td>'+escHtml(m.pc_mark)+'</td><td>'+escHtml(m.description)+'</td><td>'+m.qty+'</td><td>'+fc+'</td><td>'+dc+'</td><td style="width:80px">&nbsp;</td></tr>';
+    totalQty+=m.qty||0;
+    totalWeight+=m.total_weight_lbs||0;
+    return '<tr>'+
+      '<td style="font-family:monospace;font-weight:700">'+escHtml(m.pc_mark)+'</td>'+
+      '<td>'+escHtml(m.description)+'</td>'+
+      '<td style="text-align:center">'+m.qty+'</td>'+
+      '<td style="text-align:right">'+(m.total_weight_lbs?m.total_weight_lbs.toLocaleString():'—')+'</td>'+
+      '<td style="width:70px">&nbsp;</td>'+
+      '</tr>';
   }).join('');
+  const printDate=new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'});
+  const shipper=escHtml(bol.shipper||'Sherwood Welding');
+  const carrier=escHtml(bol.driver_name||'—');
+  const deliverTo=escHtml(bol.deliver_to||j?.address||'—');
+  const po=escHtml(j?j.name:'—');
   const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>${bol.bol_number}</title>
+  win.document.write(`<!DOCTYPE html><html><head><title>${escHtml(bol.bol_number)}</title>
   <style>
-    body{font-family:Arial,sans-serif;margin:32px;color:#000;font-size:13px}
-    h1{font-size:22px;margin:0 0 4px}
-    .meta{font-size:12px;color:#555;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-top:16px}
-    th{background:#f0f0f0;border:1px solid #ccc;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em}
-    td{border:1px solid #ddd;padding:8px 10px;vertical-align:top}
-    tr:nth-child(even) td{background:#fafafa}
-    .header-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;padding:14px;border:1px solid #ccc;border-radius:4px}
-    .field-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:2px}
-    .field-value{font-size:14px;font-weight:700}
-    .sig-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
-    .sig-line{border-top:1px solid #000;padding-top:6px;font-size:11px;color:#555}
-    @media print{body{margin:16px}}
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;margin:28px 32px;color:#000;font-size:12px}
+    h1{font-size:20px;font-weight:900;text-align:center;margin:0 0 18px;letter-spacing:0.04em;text-transform:uppercase;border-bottom:2px solid #000;padding-bottom:10px}
+    .header-table{width:100%;border-collapse:collapse;margin-bottom:14px}
+    .header-table td{padding:5px 8px;vertical-align:top;font-size:12px}
+    .header-table .lbl{font-weight:700;white-space:nowrap;width:1%;padding-right:4px}
+    .header-table .val{border-bottom:1px solid #999;min-width:120px}
+    .header-table .right-lbl{font-weight:700;white-space:nowrap;padding-left:24px;padding-right:4px}
+    .divider{border:none;border-top:1px solid #ccc;margin:10px 0}
+    table.items{width:100%;border-collapse:collapse;margin-top:8px}
+    table.items th{background:#e8e8e8;border:1px solid #aaa;padding:7px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em}
+    table.items th.num{text-align:center}
+    table.items th.right{text-align:right}
+    table.items td{border:1px solid #ccc;padding:7px 10px;vertical-align:top}
+    table.items td.num{text-align:center}
+    table.items td.right{text-align:right}
+    table.items tr:nth-child(even) td{background:#f8f8f8}
+    .totals-row td{font-weight:700;border-top:2px solid #aaa;background:#f0f0f0}
+    .instructions{border:1px solid #ccc;padding:8px 12px;margin:10px 0;min-height:36px;font-size:11px}
+    .instructions-lbl{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px}
+    .sig-section{margin-top:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+    .sig-block{border:1px solid #ccc;padding:10px 12px}
+    .sig-block-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px}
+    .sig-line{border-top:1px solid #000;margin-top:28px;padding-top:5px;font-size:10px;color:#555}
+    .sig-date{border-top:1px solid #000;margin-top:28px;padding-top:5px;font-size:10px;color:#555;margin-left:0}
+    .carrier-note{font-size:9px;color:#555;margin-top:6px;line-height:1.4}
+    @media print{body{margin:14px 18px}h1{font-size:17px}}
   </style></head><body>
-  <h1>BILL OF LADING</h1>
-  <div class="meta">Echo-5 Steel Tracker &nbsp;·&nbsp; Sherwood Welding LLC</div>
-  <div class="header-grid">
-    <div><div class="field-label">BOL Number</div><div class="field-value">${escHtml(bol.bol_number)}</div></div>
-    <div><div class="field-label">Job</div><div class="field-value">${escHtml(j?j.name:'—')}${j&&j.number?' ('+escHtml(j.number)+')':''}</div></div>
-    <div><div class="field-label">Driver</div><div class="field-value">${escHtml(bol.driver_name||'—')}</div></div>
-    <div><div class="field-label">Delivery Date</div><div class="field-value">${bol.delivery_date||'—'}</div></div>
-    <div><div class="field-label">Created By</div><div class="field-value">${escHtml(bol.created_by_name||'—')}</div></div>
-    <div><div class="field-label">Date Printed</div><div class="field-value">${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
-  </div>
-  ${bol.notes?'<div style="padding:10px 14px;background:#fffbe6;border:1px solid #e6d800;border-radius:4px;margin-bottom:12px;font-size:12px"><strong>Notes:</strong> '+escHtml(bol.notes)+'</div>':''}
-  <table>
-    <thead><tr><th>PC Mark</th><th>Description</th><th>Total Qty</th><th>Fab'd</th><th>Del'd</th><th>Received ✓</th></tr></thead>
-    <tbody>${rows}</tbody>
+  <h1>Bill of Lading — Short Form</h1>
+  <table class="header-table">
+    <tr>
+      <td class="lbl">Carrier:</td><td class="val">${carrier}</td>
+      <td class="right-lbl">Date:</td><td class="val">${bol.bol_date||printDate}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Bill of Lading #:</td><td class="val">${escHtml(bol.bol_number)}</td>
+      <td class="right-lbl">PO:</td><td class="val">${po}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Shipper/Consignor:</td><td class="val">${shipper}</td>
+      <td class="right-lbl"></td><td></td>
+    </tr>
+    <tr>
+      <td class="lbl">Deliver To:</td><td class="val" colspan="3">${deliverTo}</td>
+    </tr>
   </table>
-  <div class="sig-row">
-    <div><div class="sig-line">Driver Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div>
-    <div><div class="sig-line">Received By &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div>
+  ${bol.notes?'<div class="instructions-lbl">Instructions:</div><div class="instructions">'+escHtml(bol.notes)+'</div>':'<div class="instructions-lbl">Instructions:</div><div class="instructions" style="color:#aaa;font-style:italic">None</div>'}
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Item Code</th>
+        <th>Details</th>
+        <th class="num">Quantity</th>
+        <th class="right">Weight (lbs)</th>
+        <th class="num">Received ✓</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="totals-row">
+        <td colspan="2" style="text-align:right">Total:</td>
+        <td class="num">${totalQty}</td>
+        <td class="right">${totalWeight?totalWeight.toLocaleString():'—'}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="sig-section">
+    <div class="sig-block">
+      <div class="sig-block-title">Carrier</div>
+      <div class="sig-line">Signature</div>
+      <div class="sig-date">Pick Up Date</div>
+      <div class="carrier-note">Carrier acknowledges receipt of packages and that they are properly described above and are in good order except as noted.</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-block-title">Shipper</div>
+      <div class="sig-line">Signature</div>
+      <div class="sig-date">Pick Up Date</div>
+      <div class="carrier-note">This section confirms all materials are properly classified, described, packaged, marked and labeled.</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-block-title">Received In Apparent Good Order</div>
+      <div class="sig-line">Received By (signature)</div>
+      <div class="sig-date">Print Name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
+    </div>
   </div>
   </body></html>`);
   win.document.close();
@@ -3072,24 +3145,39 @@ async function toggleSaturday(laneId,val){
         </select>
       </div>
       <div class="form-group">
-        <label>Driver</label>
-        <select id="bol-driver-select" onchange="bolDriverSelectChanged()">
-          <option value="">-- Select Driver --</option>
-          <option value="__manual__">Enter manually...</option>
+        <label>Carrier</label>
+        <select id="bol-carrier-select" onchange="bolCarrierSelectChanged()">
+          <option value="LH Trucking">LH Trucking</option>
+          <option value="Sherwood Welding">Sherwood Welding</option>
+          <option value="__manual__">Other (enter manually)</option>
         </select>
       </div>
     </div>
-    <div class="form-group" id="bol-driver-manual-wrap" style="display:none">
-      <label>Driver Name (manual)</label>
-      <input id="bol-driver-manual" placeholder="e.g. John Smith">
+    <div class="form-group" id="bol-carrier-manual-wrap" style="display:none">
+      <label>Carrier Name (manual)</label>
+      <input id="bol-carrier-manual" placeholder="e.g. ABC Freight">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>BOL Date</label>
+        <input type="date" id="bol-bol-date">
+      </div>
+      <div class="form-group">
+        <label>Delivery Date</label>
+        <input type="date" id="bol-delivery-date">
+      </div>
+      <div class="form-group">
+        <label>Shipper/Consignor</label>
+        <input id="bol-shipper" value="Sherwood Welding" placeholder="Sherwood Welding">
+      </div>
     </div>
     <div class="form-group">
-      <label>Delivery Date</label>
-      <input type="date" id="bol-delivery-date">
+      <label>Deliver To (address)</label>
+      <input id="bol-deliver-to" placeholder="Job site address">
     </div>
     <div class="form-group">
-      <label>Notes</label>
-      <input id="bol-notes" placeholder="Optional load notes">
+      <label>Instructions (optional)</label>
+      <input id="bol-notes" placeholder="Special delivery instructions...">
     </div>
     <div id="bol-member-select-wrap" style="display:none">
       <div class="section-sub-label">Select Members to Include</div>
