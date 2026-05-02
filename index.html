@@ -260,7 +260,23 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
 .gantt-bar.behind .gantt-bar-label::before{content:'⚠ ';}
 .behind-badge{position:absolute;top:-8px;right:-4px;background:var(--red);color:#fff;border-radius:10px;font-size:0.55rem;font-family:var(--fd);font-weight:900;padding:1px 5px;pointer-events:none;white-space:nowrap;z-index:5}
 .job-behind-banner{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius);padding:6px 10px;font-size:0.78rem;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.nav-tab .tab-badge,.mobile-nav-tab .tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:#000;border-radius:10px;font-size:0.55rem;font-family:var(--fd);font-weight:900;padding:1px 5px;margin-left:4px;min-width:16px}
+ .nav-tab .tab-badge,.mobile-nav-tab .tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:#000;border-radius:10px;font-size:0.55rem;font-family:var(--fd);font-weight:900;padding:1px 5px;margin-left:4px;min-width:16px}
+.detail-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto}
+.detail-tab{padding:9px 16px;border-radius:var(--radius) var(--radius) 0 0;cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--text2);border:none;background:none;font-family:var(--fd);letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;border-bottom:2px solid transparent;transition:all 0.15s}
+.detail-tab:hover{color:var(--text)}.detail-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.detail-tab-panel{display:none}.detail-tab-panel.active{display:block}
+.scope-field{width:100%;min-height:120px;resize:vertical;font-size:0.9rem;line-height:1.5}
+.phase-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;cursor:pointer;transition:all 0.15s}
+.phase-card:hover{border-color:var(--border2)}
+.phase-card.active-phase{border-color:var(--accent);background:var(--accent-dim)}
+.phase-name{font-family:var(--fd);font-size:1rem;font-weight:900;letter-spacing:0.04em;text-transform:uppercase}
+.phase-meta{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.erection-drawing-item{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px}
+.erection-drawing-name{font-family:'Courier New',monospace;font-size:0.82rem;color:var(--green)}
+.inline-edit-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.inline-edit-label{font-family:var(--fd);font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text2);min-width:120px;flex-shrink:0}
+.inline-edit-value{flex:1;color:var(--text);font-size:0.88rem}
+.detail-dirty-bar{display:none;position:sticky;bottom:0;background:var(--surface2);border-top:1px solid var(--border);padding:12px 24px;display:flex;gap:8px;justify-content:flex-end;margin:0 -24px -24px}
 </style>
 </head>
 <body>
@@ -408,6 +424,97 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,0.01
       <button class="btn btn-primary" onclick="openImportModal()">+ New Job</button>
     </div>
     <div id="jobs-list"></div>
+  </div>
+
+  <!-- JOB DETAIL PAGE -->
+  <div id="page-job-detail" class="page">
+    <div class="section-header" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-sm btn-secondary" onclick="navigateTo('jobs')">← Jobs</button>
+        <div class="section-title" id="detail-job-title">Job Detail</div>
+      </div>
+      <div id="detail-job-badges" style="display:flex;gap:6px;align-items:center"></div>
+    </div>
+    <div class="detail-tabs" id="detail-tabs">
+      <button class="detail-tab active" onclick="switchDetailTab('overview')">Overview</button>
+      <button class="detail-tab" onclick="switchDetailTab('phases')">Phases</button>
+      <button class="detail-tab" onclick="switchDetailTab('drawings')">Drawings</button>
+      <button class="detail-tab" onclick="switchDetailTab('members')">Members</button>
+    </div>
+    <!-- OVERVIEW TAB -->
+    <div class="detail-tab-panel active" id="detail-panel-overview">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Job Info</div>
+          <div id="detail-overview-fields"></div>
+          <div id="detail-dirty-bar" style="display:none;margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-secondary" onclick="cancelDetailEdit()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveDetailJob()">Save Changes</button>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-title">Scope</div>
+            <textarea class="scope-field" id="detail-scope" placeholder="Describe the project scope..." oninput="markDetailDirty()"></textarea>
+          </div>
+          <div class="card" style="margin-top:0">
+            <div class="card-title">Stats</div>
+            <div id="detail-stats"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- PHASES TAB -->
+    <div class="detail-tab-panel" id="detail-panel-phases">
+      <div class="section-header">
+        <div style="font-size:0.85rem;color:var(--text2)">Phases let you split a job into independently scheduled segments. Members default to Phase I.</div>
+        <button class="btn btn-primary btn-sm" onclick="addPhase()">+ Add Phase</button>
+      </div>
+      <div id="detail-phases-list"></div>
+    </div>
+    <!-- DRAWINGS TAB -->
+    <div class="detail-tab-panel" id="detail-panel-drawings">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Shop Drawings</div>
+          <div class="text-muted" style="font-size:0.78rem;margin-bottom:12px">Per-member shop drawings for this job.</div>
+          <div id="detail-shop-drawings"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Erection Drawings</div>
+          <div class="text-muted" style="font-size:0.78rem;margin-bottom:12px">Job-level erection drawings.</div>
+          <div class="upload-zone" onclick="document.getElementById('erection-file-input').click()" style="padding:20px;margin-bottom:12px">
+            <div class="upload-icon" style="font-size:1.4rem">📐</div>
+            <div class="text-muted" style="font-size:0.82rem">Click to upload erection drawing PDFs</div>
+          </div>
+          <input id="erection-file-input" type="file" accept=".pdf" multiple class="hidden" onchange="uploadErectionDrawings(event)">
+          <div id="detail-erection-drawings"></div>
+        </div>
+      </div>
+    </div>
+    <!-- MEMBERS TAB -->
+    <div class="detail-tab-panel" id="detail-panel-members">
+      <div class="filter-bar" id="detail-phase-filter" style="display:none"></div>
+      <div class="search-row">
+        <input id="detail-member-search" placeholder="Search PC mark, description..." oninput="renderDetailMembers()">
+        <select id="detail-member-status-filter" onchange="renderDetailMembers()" style="width:175px">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="partial-fab">Partial Fabricated</option>
+          <option value="fabbed">Fully Fabricated</option>
+          <option value="partial-del">Partial Delivered</option>
+          <option value="delivered">Fully Delivered</option>
+        </select>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>PC Mark</th><th>Description</th><th>Phase</th><th>Qty</th><th>Fab'd</th><th>Delivered</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="detail-members-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- SCHEDULE PAGE -->
@@ -821,15 +928,17 @@ const PAGES=[
   {id:'bolts',label:'Bolts',roles:['admin','pm','shop_mgr','field_super','installer']},
   {id:'jobs',label:'Jobs',roles:['admin','pm','shop_mgr']},
   {id:'schedule',label:'Schedule',roles:['admin','pm','shop_mgr','fabricator','field_super']},
+  {id:'job-detail',label:'Job Detail',roles:['admin','pm','shop_mgr','fabricator','field_super']},
   {id:'log',label:'Log',roles:['admin','pm','shop_mgr']},
   {id:'admin',label:'Admin',roles:['admin']},
 ];
 const PAGE_ICONS={dashboard:'🏠',scan:'📷',members:'🔩',components:'🔧',bolts:'⚙️',jobs:'📋',schedule:'📅',log:'📜',admin:'👤'};
 
+const HIDDEN_NAV_PAGES=['job-detail'];
 function buildNav(){
   const tabs=document.getElementById('nav-tabs');tabs.innerHTML='';
   const mob=document.getElementById('mobile-nav');mob.innerHTML='';
-  PAGES.filter(p=>p.roles.includes(currentUser.role)).forEach(p=>{
+  PAGES.filter(p=>p.roles.includes(currentUser.role)&&!HIDDEN_NAV_PAGES.includes(p.id)).forEach(p=>{
     const b=document.createElement('button');b.className='nav-tab';b.dataset.page=p.id;b.onclick=()=>navigateTo(p.id);
     if(p.id==='schedule'){const uc=JOBS.filter(j=>!j.schedule_start_date).length;b.innerHTML=p.label+(uc?'<span class="tab-badge">'+uc+'</span>':'');}else{b.textContent=p.label;}
     tabs.appendChild(b);
@@ -851,6 +960,7 @@ function navigateTo(pid){
   if(pid==='components')renderComponents();
   if(pid==='bolts')renderBolts();
   if(pid==='jobs')renderJobs();
+  if(pid==='job-detail')renderJobDetail();
   if(pid==='schedule'){renderGantt();const cb=document.getElementById('gantt-cal-btn-wrap');if(cb)cb.style.display=['admin','shop_mgr'].includes(currentUser.role)?'':'none';}
   if(pid==='log')renderLog();
   if(pid==='admin')renderAdmin();
@@ -1320,7 +1430,8 @@ function renderJobs(){
     div.innerHTML=
       '<div class="section-header"><div>'+
       '<div style="font-family:var(--fd);font-size:1.25rem;font-weight:900;display:flex;align-items:center;gap:8px">'+
-      '<span style="width:8px;height:8px;border-radius:50%;background:'+pmColor+';display:inline-block;flex-shrink:0"></span>'+j.name+
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+pmColor+';display:inline-block;flex-shrink:0"></span>'+
+      '<span style="cursor:pointer" onclick="openJobDetail(\''+j.id+'\')" class="text-accent">'+j.name+'</span>'+
       ' <span class="badge badge-job">'+(j.number||'')+'</span>'+(j.pm_id===currentUser.id?' <span class="owner-badge">My Job</span>':'')+
       '</div>'+
       '<div class="text-muted" style="font-size:0.78rem;margin-top:4px">GC: '+(j.gc||'—')+' · PM: '+(pm?pm.name:'—')+' · Due: '+(j.due||'TBD')+'</div>'+
@@ -1530,6 +1641,333 @@ async function doImport(){
     await logAction(job.id,null,'(all)','JOB IMPORTED');closeModal('modal-import');navigateTo('jobs');
   }catch(e){showAlert('Import error: '+e.message,'error');}finally{hideLoading();}
 }
+/* ══════════════════════════════════════════════
+   JOB DETAIL PAGE
+   ══════════════════════════════════════════════ */
+let currentDetailJobId=null;
+let detailDirty=false;
+let detailPhaseFilter=null;
+let PHASES=[];
+let ERECTION_DRAWINGS=[];
+
+function openJobDetail(jobId){
+  currentDetailJobId=jobId;
+  detailDirty=false;
+  detailPhaseFilter=null;
+  navigateTo('job-detail');
+}
+
+async function renderJobDetail(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  const pm=PROFILES.find(u=>u.id===j.pm_id);
+  const pmColor=getPmColor(j.pm_id);
+  document.getElementById('detail-job-title').textContent=j.name;
+  document.getElementById('detail-job-badges').innerHTML=
+    '<span class="badge badge-job">'+(j.number||'No #')+'</span>'+
+    (j.pm_id===currentUser.id?'<span class="owner-badge">My Job</span>':'')+
+    '<span style="font-size:0.78rem;color:var(--text2)">PM: '+(pm?pm.name:'—')+'</span>';
+  // Load phases and erection drawings
+  showLoading('Loading job detail...');
+  try{
+    const [phases,eDrawings]=await Promise.all([
+      sb.select('phases','job_id=eq.'+j.id+'&order=phase_number.asc'),
+      sb.select('drawings','job_id=eq.'+j.id+'&drawing_type=eq.erection&order=created_at.asc'),
+    ]);
+    PHASES=phases||[];
+    ERECTION_DRAWINGS=eDrawings||[];
+  }catch(e){PHASES=[];ERECTION_DRAWINGS=[];}
+  finally{hideLoading();}
+  switchDetailTab('overview');
+}
+
+function switchDetailTab(tab){
+  document.querySelectorAll('.detail-tab').forEach((t,i)=>{
+    const tabs=['overview','phases','drawings','members'];
+    t.classList.toggle('active',tabs[i]===tab);
+  });
+  document.querySelectorAll('.detail-tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('detail-panel-'+tab).classList.add('active');
+  if(tab==='overview')renderDetailOverview();
+  if(tab==='phases')renderDetailPhases();
+  if(tab==='drawings')renderDetailDrawings();
+  if(tab==='members')renderDetailMembers();
+}
+
+function renderDetailOverview(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  const canEdit=['admin','pm','shop_mgr'].includes(currentUser.role);
+  const durConfBy=j.duration_confirmed?PROFILES.find(p=>p.id===j.duration_confirmed_by):null;
+  const ji=INSTANCES.filter(i=>i.job_id===j.id);
+  const jf=ji.filter(i=>i.status!=='pending').length,jd=ji.filter(i=>i.status==='delivered').length;
+  const pct=ji.length?Math.round(jf/ji.length*100):0;
+  const tw=MEMBERS.filter(m=>m.job_id===j.id).reduce((s,m)=>s+(m.total_weight_lbs||0),0);
+
+  // Build PM select options
+  let pmOpts='<option value="">-- Select PM --</option>';
+  PROFILES.filter(u=>['admin','pm','shop_mgr'].includes(u.role)).forEach(u=>{
+    pmOpts+='<option value="'+u.id+'"'+(j.pm_id===u.id?' selected':'')+'>'+u.name+'</option>';
+  });
+
+  document.getElementById('detail-overview-fields').innerHTML=
+    '<div class="inline-edit-row"><span class="inline-edit-label">Job Name</span>'+
+    (canEdit?'<input id="dj-name" value="'+escHtml(j.name||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+escHtml(j.name)+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Job Number</span>'+
+    (canEdit?'<input id="dj-number" value="'+escHtml(j.number||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.number||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">General Contractor</span>'+
+    (canEdit?'<input id="dj-gc" value="'+escHtml(j.gc||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.gc||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">PM</span>'+
+    (canEdit?'<select id="dj-pm" onchange="markDetailDirty()" style="flex:1">'+pmOpts+'</select>':'<span class="inline-edit-value">'+(PROFILES.find(p=>p.id===j.pm_id)?.name||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Due Date</span>'+
+    (canEdit?'<input id="dj-due" type="date" value="'+(j.due||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.due||'TBD')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Address</span>'+
+    (canEdit?'<input id="dj-address" value="'+escHtml(j.address||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.address||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Contact Name</span>'+
+    (canEdit?'<input id="dj-contact-name" value="'+escHtml(j.contact_name||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.contact_name||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Contact Phone</span>'+
+    (canEdit?'<input id="dj-contact-phone" type="tel" value="'+escHtml(j.contact_phone||'')+'" oninput="markDetailDirty()" style="flex:1">':'<span class="inline-edit-value">'+(j.contact_phone||'—')+'</span>')+
+    '</div>'+
+    '<div class="inline-edit-row"><span class="inline-edit-label">Fab Duration</span>'+
+    (canEdit?'<input id="dj-duration" type="number" min="0.1" step="0.1" value="'+(j.duration_days||1)+'" oninput="markDetailDirty()" style="flex:1;max-width:100px"> <span style="font-size:0.75rem;color:'+(j.duration_confirmed?'var(--green)':'var(--yellow)')+'">'+( j.duration_confirmed?'✓ Confirmed'+(durConfBy?' by '+durConfBy.name:''):'⚠ Unconfirmed')+'</span>':'<span class="inline-edit-value">'+(j.duration_days||1)+' days</span>')+
+    '</div>'+
+    (canEdit?'<div id="detail-dirty-bar" style="display:none;margin-top:16px;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="cancelDetailEdit()">Cancel</button><button class="btn btn-primary" onclick="saveDetailJob()">Save Changes</button></div>':'');
+
+  document.getElementById('detail-scope').value=j.scope||'';
+
+  document.getElementById('detail-stats').innerHTML=
+    '<div class="grid-4" style="gap:8px">'+
+    '<div class="stat"><div class="stat-label">Pieces</div><div class="stat-value" style="font-size:1.5rem">'+ji.length+'</div></div>'+
+    '<div class="stat yellow"><div class="stat-label">Fab\'d</div><div class="stat-value" style="font-size:1.5rem;color:var(--yellow)">'+jf+'</div></div>'+
+    '<div class="stat green"><div class="stat-label">Delivered</div><div class="stat-value" style="font-size:1.5rem;color:var(--green)">'+jd+'</div></div>'+
+    '<div class="stat"><div class="stat-label">Weight</div><div class="stat-value" style="font-size:1.1rem">'+tw.toLocaleString()+' <span style="font-size:0.65rem;color:var(--text2)">lbs</span></div></div>'+
+    '</div>'+
+    '<div class="progress-bar mt-8"><div class="progress-fill pf-fab" style="width:'+pct+'%"></div></div>'+
+    '<div style="font-size:0.75rem;color:var(--text2);margin-top:6px">'+pct+'% fabricated</div>'+
+    (isJobBehind(j)?'<div class="job-behind-banner" style="margin-top:10px">⚠ Behind pace: '+Math.round(getJobBehindPct(j))+'% behind</div>':'');
+}
+
+function markDetailDirty(){
+  detailDirty=true;
+  const bar=document.getElementById('detail-dirty-bar');
+  if(bar)bar.style.display='flex';
+}
+
+function cancelDetailEdit(){
+  detailDirty=false;
+  renderDetailOverview();
+}
+
+async function saveDetailJob(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  const canConfirm=['admin','shop_mgr'].includes(currentUser.role);
+  const name=document.getElementById('dj-name')?.value.trim()||j.name;
+  if(!name)return showAlert('Job name is required.','warn');
+  const dur=parseFloat(document.getElementById('dj-duration')?.value)||j.duration_days||1;
+  const scope=document.getElementById('detail-scope').value.trim()||null;
+  const updates={
+    name,
+    number:document.getElementById('dj-number')?.value.trim()||null,
+    gc:document.getElementById('dj-gc')?.value.trim()||null,
+    due:document.getElementById('dj-due')?.value||null,
+    pm_id:document.getElementById('dj-pm')?.value||null,
+    address:document.getElementById('dj-address')?.value.trim()||null,
+    contact_name:document.getElementById('dj-contact-name')?.value.trim()||null,
+    contact_phone:document.getElementById('dj-contact-phone')?.value.trim()||null,
+    duration_days:dur,
+    scope,
+  };
+  if(canConfirm&&(!j.duration_confirmed||j.duration_days!==dur)){
+    updates.duration_confirmed=true;
+    updates.duration_confirmed_by=currentUser.id;
+    updates.duration_confirmed_at=new Date().toISOString();
+  }
+  try{
+    await sb.update('jobs',updates,'id=eq.'+currentDetailJobId);
+    Object.assign(j,updates);
+    detailDirty=false;
+    renderDetailOverview();
+    showAlert('Job saved.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}
+}
+
+/* ── PHASES ── */
+function renderDetailPhases(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  const canEdit=['admin','pm','shop_mgr'].includes(currentUser.role);
+  const list=document.getElementById('detail-phases-list');
+  if(!PHASES.length){
+    list.innerHTML='<div class="card"><div class="text-muted" style="text-align:center;padding:20px">No additional phases. Click "+ Add Phase" to split this job into phases.</div></div>';
+    return;
+  }
+  // Show all phases including Phase I when there are multiple
+  const allPhases=[{id:'__phase1__',phase_number:1,name:'Phase I',scope:null,member_count:MEMBERS.filter(m=>m.job_id===j.id&&(!m.phase_id||m.phase_id===PHASES[0]?.id)).length},...PHASES.slice(1).map(p=>({...p,member_count:MEMBERS.filter(m=>m.phase_id===p.id).length}))];
+  list.innerHTML=PHASES.map((p,idx)=>{
+    const memberCount=MEMBERS.filter(m=>m.job_id===j.id&&(idx===0?(!m.phase_id||m.phase_id===p.id):m.phase_id===p.id)).length;
+    const phaseName=PHASES.length>1?'Phase '+['I','II','III','IV','V','VI','VII','VIII','IX','X'][p.phase_number-1]:'';
+    return '<div class="phase-card" onclick="filterDetailMembersByPhase(\''+p.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<div class="phase-name">'+(phaseName||'Phase I')+'</div>'+
+      (canEdit&&idx>0?'<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePhase(\''+p.id+'\')">Remove</button>':'')+
+      '</div>'+
+      '<div class="phase-meta">'+memberCount+' member'+(memberCount!==1?'s':'')+
+      (p.scope?'<span style="margin-left:12px;font-style:italic">'+escHtml(p.scope.slice(0,60))+(p.scope.length>60?'…':'')+'</span>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+async function addPhase(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  const nextNum=(PHASES.length||0)+1;
+  if(nextNum>10)return showAlert('Maximum 10 phases.','warn');
+  showLoading('Adding phase...');
+  try{
+    const rec={job_id:currentDetailJobId,phase_number:nextNum,name:'Phase '+['I','II','III','IV','V','VI','VII','VIII','IX','X'][nextNum-1]};
+    const res=await sb.insert('phases',rec);
+    if(res&&res[0]){
+      PHASES.push(res[0]);
+      // If this is the first added phase, create Phase I record too
+      if(PHASES.length===1){
+        const p1={job_id:currentDetailJobId,phase_number:1,name:'Phase I'};
+        const r1=await sb.insert('phases',p1);
+        if(r1&&r1[0])PHASES.unshift(r1[0]);
+      }
+    }
+    if(!j.has_phases){
+      await sb.update('jobs',{has_phases:true},'id=eq.'+currentDetailJobId);
+      j.has_phases=true;
+    }
+    renderDetailPhases();
+    showAlert('Phase added.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+
+async function deletePhase(phaseId){
+  if(!confirm('Remove this phase? Members assigned to it will be moved to Phase I.'))return;
+  const phase1=PHASES[0];
+  try{
+    // Move members to phase I
+    await sb.update('members',{phase_id:phase1?.id||null},'phase_id=eq.'+phaseId);
+    MEMBERS.filter(m=>m.phase_id===phaseId).forEach(m=>m.phase_id=phase1?.id||null);
+    await sb.delete('phases','id=eq.'+phaseId);
+    PHASES=PHASES.filter(p=>p.id!==phaseId);
+    renderDetailPhases();
+    showAlert('Phase removed.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}
+}
+
+function filterDetailMembersByPhase(phaseId){
+  detailPhaseFilter=phaseId;
+  switchDetailTab('members');
+}
+
+/* ── DRAWINGS ── */
+function renderDetailDrawings(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  // Shop drawings
+  const shopDrawings=DRAWINGS.filter(d=>d.job_id===j.id&&d.drawing_type!=='erection');
+  const shopEl=document.getElementById('detail-shop-drawings');
+  if(shopDrawings.length){
+    shopEl.innerHTML=shopDrawings.map(d=>{
+      const m=MEMBERS.find(x=>x.id===d.member_id);
+      return '<div class="drawing-item"><span class="drawing-name">📄 '+(m?m.pc_mark+' — ':'')+d.filename+'</span>'+
+        '<button class="btn btn-sm btn-secondary" onclick="viewDrawing(\''+d.id+'\')">View</button></div>';
+    }).join('');
+  }else{
+    shopEl.innerHTML='<div class="text-muted" style="font-size:0.82rem;padding:8px 0">No shop drawings uploaded for this job.</div>';
+  }
+  // Erection drawings
+  const erEl=document.getElementById('detail-erection-drawings');
+  if(ERECTION_DRAWINGS.length){
+    erEl.innerHTML=ERECTION_DRAWINGS.map(d=>
+      '<div class="erection-drawing-item"><span class="erection-drawing-name">📐 '+d.filename+'</span>'+
+      '<div style="display:flex;gap:6px">'+
+      '<button class="btn btn-sm btn-secondary" onclick="viewDrawing(\''+d.id+'\')">View</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="deleteErectionDrawing(\''+d.id+'\')">✕</button>'+
+      '</div></div>'
+    ).join('');
+  }else{
+    erEl.innerHTML='<div class="text-muted" style="font-size:0.82rem;padding:8px 0">No erection drawings uploaded.</div>';
+  }
+}
+
+async function uploadErectionDrawings(event){
+  const files=[...event.target.files];if(!files.length)return;
+  showLoading('Uploading erection drawings...');
+  try{
+    for(const file of files){
+      const path=currentDetailJobId+'/erection/'+Date.now()+'_'+file.name;
+      const uploadRes=await fetch(SUPABASE_URL+'/storage/v1/object/drawings/'+path,{method:'POST',headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+currentSession.access_token,'Content-Type':'application/pdf'},body:file});
+      if(!uploadRes.ok)continue;
+      const rec={job_id:currentDetailJobId,member_id:null,filename:file.name,storage_path:path,uploaded_by:currentUser.id,drawing_type:'erection'};
+      const res=await sb.insert('drawings',rec);
+      if(res&&res[0])ERECTION_DRAWINGS.push(res[0]);
+    }
+    document.getElementById('erection-file-input').value='';
+    renderDetailDrawings();
+    showAlert('Erection drawing(s) uploaded.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}finally{hideLoading();}
+}
+
+async function deleteErectionDrawing(drawingId){
+  if(!confirm('Remove this erection drawing?'))return;
+  const d=ERECTION_DRAWINGS.find(x=>x.id===drawingId);if(!d)return;
+  try{
+    await fetch(SUPABASE_URL+'/storage/v1/object/drawings/'+d.storage_path,{method:'DELETE',headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+currentSession.access_token}}).catch(()=>{});
+    await sb.delete('drawings','id=eq.'+drawingId);
+    ERECTION_DRAWINGS=ERECTION_DRAWINGS.filter(x=>x.id!==drawingId);
+    renderDetailDrawings();
+    showAlert('Drawing removed.','success');
+  }catch(e){showAlert('Error: '+e.message,'error');}
+}
+
+/* ── DETAIL MEMBERS TAB ── */
+function renderDetailMembers(){
+  const j=JOBS.find(x=>x.id===currentDetailJobId);if(!j)return;
+  // Phase filter bar
+  const filterBar=document.getElementById('detail-phase-filter');
+  if(PHASES.length>1){
+    filterBar.style.display='flex';
+    filterBar.innerHTML='<span class="job-pill '+(detailPhaseFilter===null?'active':'')+'" onclick="detailPhaseFilter=null;renderDetailMembers()">All Phases</span>'+
+      PHASES.map((p,idx)=>'<span class="job-pill '+(detailPhaseFilter===p.id?'active':'')+'" onclick="detailPhaseFilter=\''+p.id+'\';renderDetailMembers()">'+
+        'Phase '+['I','II','III','IV','V'][p.phase_number-1]+'</span>').join('');
+  }else{
+    filterBar.style.display='none';
+  }
+  const search=(document.getElementById('detail-member-search')?.value||'').toLowerCase();
+  const sf=document.getElementById('detail-member-status-filter')?.value||'';
+  let members=MEMBERS.filter(m=>{
+    if(m.job_id!==j.id)return false;
+    if(detailPhaseFilter){if(m.phase_id!==detailPhaseFilter)return false;}
+    if(sf&&getMemberStatus(m.id)!==sf)return false;
+    if(search)return m.pc_mark.toLowerCase().includes(search)||m.description.toLowerCase().includes(search);
+    return true;
+  });
+  const phase1Id=PHASES[0]?.id||null;
+  const tbody=document.getElementById('detail-members-tbody');
+  tbody.innerHTML=members.map(m=>{
+    const ms=getMemberStatus(m.id),fc=getFabCount(m.id),dc=getDelCount(m.id);
+    const phase=PHASES.find(p=>p.id===m.phase_id)||(PHASES.length?PHASES[0]:null);
+    const phaseLabel=PHASES.length>1?(phase?'Phase '+['I','II','III','IV','V'][(phase.phase_number||1)-1]:'Phase I'):'—';
+    const hasDsp=getMemberHasDispute(m.id),hasDlv=getMemberHasDelivery(m.id);
+    return '<tr><td><strong class="text-accent" style="cursor:pointer;font-family:var(--fd);font-size:1rem" onclick="openMemberDetail(\''+m.id+'\')">'+m.pc_mark+'</strong>'+
+      (hasDsp?' 🟡':'')+(hasDlv?' 🚛':'')+
+      '</td><td>'+m.description+'</td>'+
+      '<td><span class="badge badge-pending" style="font-size:0.65rem">'+phaseLabel+'</span></td>'+
+      '<td>'+m.qty+'</td>'+
+      '<td style="color:var(--yellow);font-weight:700">'+fc+'/'+m.qty+'</td>'+
+      '<td style="color:var(--green);font-weight:700">'+dc+'/'+m.qty+'</td>'+
+      '<td>'+statusBadge(ms)+'</td>'+
+      '<td><button class="btn btn-sm btn-secondary" onclick="openMemberDetail(\''+m.id+'\')">Detail</button></td></tr>';
+  }).join('');
+  if(!members.length)tbody.innerHTML='<tr><td colspan="8" class="text-muted" style="text-align:center;padding:32px">No members found.</td></tr>';
+}
+
 function renderLog(){document.getElementById('audit-log-list').innerHTML=AUDIT.map(e=>'<div class="log-entry"><div class="log-time">'+fmtTime(e.created_at)+'</div><div class="log-action-text"><span class="log-user">'+(e.performed_by_name||'?')+'</span> — '+e.action+' — <strong>'+(e.pc_mark||'')+'</strong>'+(e.detail?' ('+e.detail+')':'')+'<div style="font-size:0.7rem;color:var(--text3)">'+(JOBS.find(j=>j.id===e.job_id)?JOBS.find(j=>j.id===e.job_id).name:'')+'</div></div></div>').join('')||'<div class="text-muted" style="padding:20px">No activity.</div>';}
 function renderAdmin(){document.getElementById('admin-users-tbody').innerHTML=PROFILES.map(u=>{const pmColor=PM_COLOR_NAMES[u.name];return '<tr><td><div style="display:flex;align-items:center;gap:8px">'+(pmColor?'<span style="width:8px;height:8px;border-radius:50%;background:'+pmColor+';display:inline-block"></span>':'')+u.name+'</div></td><td><span class="role-badge">'+ROLE_LABELS[u.role]+'</span></td><td>'+(ROLES[u.role].canFab?'✅':'❌')+'</td><td>'+(ROLES[u.role].canDeliver?'✅':'❌')+'</td><td>'+(ROLES[u.role].canImport?'✅':'❌')+'</td><td>'+ROLES[u.role].canUndo+'</td><td>'+(ROLES[u.role].canAdmin?'✅':'❌')+'</td></tr>';}).join('');}
 function exportCSV(){const rows=[['PC Mark','Instance','Description','Job','Unit Wt (lbs)','Status','Fabbed By','Fabbed At','Delivered By','Delivered At','Method']];INSTANCES.forEach(i=>{const m=MEMBERS.find(x=>x.id===i.member_id),j=JOBS.find(x=>x.id===i.job_id);const fb=PROFILES.find(x=>x.id===i.fabbed_by),db=PROFILES.find(x=>x.id===i.delivered_by);rows.push([m?m.pc_mark:'',m?m.pc_mark+'-'+String(i.instance_num).padStart(2,'0'):'',m?m.description:'',j?j.name:'',m?m.unit_weight_lbs||'':'',i.status,fb?fb.name:'',i.fabbed_at||'',db?db.name:'',i.delivered_at||'',i.method||'']);});const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(v=>'"'+String(v)+'"').join(',')).join('\n')],{type:'text/csv'}));a.download='echo5-export.csv';a.click();}
